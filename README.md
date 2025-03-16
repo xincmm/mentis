@@ -13,6 +13,7 @@ Mentis 是一个基于 LangGraph 构建的多智能体系统框架，通过 Supe
 - **控制权转移机制**：通过 `handoff` 工具实现智能体间的控制权转移
 - **模块化设计**：便于扩展和维护的模块化架构
 - **可视化工作流**：支持工作流程的可视化，便于理解和调试
+- **实时信息获取**：通过 Tavily 搜索工具集成，使系统能够获取最新的网络信息
 
 ## 项目结构
 
@@ -20,13 +21,11 @@ Mentis 是一个基于 LangGraph 构建的多智能体系统框架，通过 Supe
 .
 ├── core/               # 核心模块
 │   ├── agents/         # 智能体模块
-│   │   └── supervisor.py  # Supervisor 实现
+│   │   └── supervisor/ # Supervisor 实现
 │   └── tools/          # 工具模块
 ├── examples/           # 示例代码
-│   ├── 01_supervisor_test.py  # Supervisor 模式示例
 │   └── graphs/         # 工作流可视化图表
 ├── instructions/       # 使用说明文档
-│   └── 01.supervisor_pattern.md  # Supervisor 模式详解
 ├── pyproject.toml      # 项目配置
 └── requirements.txt    # 项目依赖
 ```
@@ -52,65 +51,27 @@ source .venv/bin/activate  # Linux/macOS
 
 ## 使用说明
 
-### Supervisor 模式示例
-
-项目包含一个 Supervisor 模式的示例实现，展示了如何协调多个智能体完成复合任务：
-
-1. **笑话生成器**：使用功能型 API 创建的专业智能体，负责生成幽默内容
-2. **研究专家**：使用图形 API 创建的专业智能体，负责查询和提供事实信息
-3. **Supervisor**：协调上述两个智能体，根据用户需求按顺序调用它们
-
-运行示例：
+项目包含多个示例实现，展示了不同功能和模式：
 
 ```bash
+# 运行 Supervisor 模式示例
 python examples/01_supervisor_test.py
+
+# 运行 Supervisor Agent 模式示例
+python examples/02_supervisor_agent_test.py
+
+# 运行 Tavily 搜索工具集成示例
+python examples/03_tavily_tools_test.py
 ```
 
 示例将生成工作流可视化图表，保存在 `examples/graphs/` 目录下。
 
-### 创建自定义智能体
-
-Mentis 支持两种方式创建智能体：
-
-#### 功能型 API（Functional API）
-
-```python
-@task
-def generate_content(messages):
-    # 实现智能体逻辑
-    return result
-
-@entrypoint()
-def custom_agent(state):
-    # 调用任务并处理结果
-    return {"messages": messages}
-```
-
-#### 图形 API（Graph API）
-
-```python
-custom_agent = create_react_agent(
-    model=model,
-    tools=[tool_function],
-    name="custom_agent",
-    prompt="智能体的系统提示"
-)
-```
-
-### 创建 Supervisor
-
-使用 `create_supervisor` 函数创建 Supervisor 并协调多个智能体：
-
-```python
-workflow = create_supervisor(
-    [agent1, agent2, ...],  # 专业智能体列表
-    model=model,            # 语言模型
-    prompt="Supervisor 的系统提示"
-)
-```
-
-## 更多资源
+## 详细文档
 
 详细的实现说明和使用指南，请参考 `instructions/` 目录下的文档：
 
-- [Supervisor 模式详解](instructions/01.supervisor_pattern.md)：介绍 Supervisor 模式的工作原理和实现细节
+- [Supervisor 模式详解](instructions/01.supervisor_pattern.md)：介绍 Supervisor 模式的基本工作流程和控制权转移机制
+- [Supervisor Agent 模式详解](instructions/02.supervisor_pattern_agent.md)：介绍 Supervisor 模式的 Agent 封装实现
+- [Tavily 搜索工具集成](instructions/03.tavily_search_integration.md)：介绍如何在多智能体系统中集成 Tavily 搜索工具，为系统提供实时信息获取能力
+
+每个文档都包含详细的实现原理、代码分析和使用示例，帮助您深入理解系统的各个组件和功能。
