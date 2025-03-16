@@ -41,6 +41,34 @@ uv venv
 uv pip install -r requirements.txt
 ```
 
+### 配置环境变量
+
+项目使用第三方API服务，需要配置相应的API密钥。请按照以下步骤设置：
+
+1. 复制 .env.example 文件为 .env：
+
+```bash
+cp .env.example .env
+```
+
+2. 编辑 .env 文件，填入所需的API密钥：
+
+```
+# LLM API Keys
+OPENAI_API_KEY=your_openai_api_key
+
+# Tool API Keys
+TAVILY_API_KEY=your_tavily_api_key
+FIRECRAWL_API_KEY=your_firecrawl_api_key
+JINA_API_KEY=your_jina_api_key
+```
+
+获取API密钥：
+- OpenAI API密钥：在[OpenAI平台](https://platform.openai.com/api-keys)注册并创建
+- Tavily API密钥：访问[Tavily AI](https://tavily.com/)注册获取
+- FireCrawl API密钥：访问[FireCrawl](https://firecrawl.dev/)注册获取
+- Jina API密钥：访问[Jina AI](https://jina.ai/)注册获取
+
 ### 激活虚拟环境
 
 ```bash
@@ -64,14 +92,12 @@ python examples/02_supervisor_agent_test.py
 python examples/03_tavily_tools_test.py
 ```
 
-示例将生成工作流可视化图表，保存在 `examples/graphs/` 目录下。
+示例将生成工作流可视化图表，保存在 graphs 目录下。
 
 ## 详细文档
 
-详细的实现说明和使用指南，请参考 `instructions/` 目录下的文档：
+详细的实现说明和使用指南，请参考 [instructions](https://github.com/foreveryh/mentis/tree/main/instructions) 目录下的文档：
 
-- [Supervisor 模式详解](instructions/01.supervisor_pattern.md)：介绍 Supervisor 模式的基本工作流程和控制权转移机制
-- [Supervisor Agent 模式详解](instructions/02.supervisor_pattern_agent.md)：介绍 Supervisor 模式的 Agent 封装实现
-- [Tavily 搜索工具集成](instructions/03.tavily_search_integration.md)：介绍如何在多智能体系统中集成 Tavily 搜索工具，为系统提供实时信息获取能力
-
-每个文档都包含详细的实现原理、代码分析和使用示例，帮助您深入理解系统的各个组件和功能。
+- Supervisor 模式详解：介绍 Supervisor 模式的基本工作流程和控制权转移机制
+- Supervisor Agent 模式详解：介绍 Supervisor 模式的 Agent 封装实现
+- Tavily 搜索工具集成：介绍如何在多智能体系统中集成 Tavily 搜索工具，为系统提供实时信息获取能力
