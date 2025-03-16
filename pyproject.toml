@@ -1,0 +1,12 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mentis"
+version = "0.1.0"
+description = "A Multi-Agents project based on langgraph"
+requires-python = ">=3.9"
+
+[tool.setuptools]
+packages = ["core"]

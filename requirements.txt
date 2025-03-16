@@ -1,0 +1,9 @@
+# Core dependencies
+langgraph
+langgraph-supervisor
+langgraph-checkpoint
+langgraph-prebuilt
+langgraph-sdk
+langsmith
+pydantic
+pydantic-core
