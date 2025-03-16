@@ -1,1 +1,1 @@
-# Tools module initialization
+# Tools package initialization

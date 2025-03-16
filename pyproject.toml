@@ -1,12 +1,25 @@
 [build-system]
 requires = ["setuptools>=42", "wheel"]
 build-backend = "setuptools.build_meta"
+readme = "README.md"
+requires-python = ">=3.9"
 
 [project]
 name = "mentis"
 version = "0.1.0"
 description = "A Multi-Agents project based on langgraph"
 requires-python = ">=3.9"
+dependencies = [
+    "dotenv>=0.9.9",
+    "langchain-community>=0.3.19",
+    "langchain-core>=0.3.45",
+    "langchain-openai>=0.3.8",
+    "langgraph>=0.3.11",
+    "pydantic>=2.10.6",
+    "typing-extensions>=4.12.2",
+    "python-dotenv>=1.0.0",
+    "firecrawl-py",
+]
 
 [tool.setuptools]
 packages = ["core"]
