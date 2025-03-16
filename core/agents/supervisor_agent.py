@@ -1,25 +1,16 @@
-from typing import Any, Callable, Dict, List, Optional, Type, Union
+from typing import Any, Callable, Dict, List, Optional, Union
 
 from langchain_core.language_models import LanguageModelLike
 from langchain_core.tools import BaseTool
 from langgraph.graph import END, START, StateGraph
 from langgraph.prebuilt.chat_agent_executor import (
     AgentState,
-    Prompt,
     StateSchemaType,
-    StructuredResponseSchema,
-    create_react_agent,
 )
 from langgraph.pregel import Pregel
+from core.agents.supervisor import create_supervisor
 
-from langgraph_supervisor.agent_name import AgentNameMode, with_agent_name
-from langgraph_supervisor.handoff import (
-    create_handoff_back_messages,
-    create_handoff_tool,
-)
-
-
-class Supervisor:
+class SupervisorAgent(Pregel):
     """Supervisor class for managing multiple agents.
     
     This class provides a high-level interface for creating a supervisor workflow
@@ -64,7 +55,6 @@ class Supervisor:
         Returns:
             The built StateGraph
         """
-        from langgraph_supervisor import create_supervisor
         
         self._workflow = create_supervisor(
             agents=self.agents,

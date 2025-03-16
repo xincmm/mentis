@@ -23,7 +23,7 @@ Mentis 是一个基于 LangGraph 构建的多智能体系统框架，通过 Supe
 │   │   └── supervisor.py  # Supervisor 实现
 │   └── tools/          # 工具模块
 ├── examples/           # 示例代码
-│   ├── 1_supervisor_test_01.py  # Supervisor 模式示例
+│   ├── 01_supervisor_test.py  # Supervisor 模式示例
 │   └── graphs/         # 工作流可视化图表
 ├── instructions/       # 使用说明文档
 │   └── 01.supervisor_pattern.md  # Supervisor 模式详解
@@ -63,7 +63,7 @@ source .venv/bin/activate  # Linux/macOS
 运行示例：
 
 ```bash
-python examples/1_supervisor_test_01.py
+python examples/01_supervisor_test.py
 ```
 
 示例将生成工作流可视化图表，保存在 `examples/graphs/` 目录下。
