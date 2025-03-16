@@ -1,9 +1,5 @@
 import os
 import sys
-
-# Add project root to Python path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
 from langgraph.prebuilt import create_react_agent
 from langchain_openai import ChatOpenAI
 import json
@@ -11,8 +7,8 @@ from typing import Dict, Any
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from dotenv import load_dotenv
 from langchain_community.tools import JinaSearch
-# 然后导入模块
 from core.tools.firecrawl_tools import FireCrawlTool
+
 
 load_dotenv()  # 自动加载 .env 文件
 # 初始化大模型
@@ -49,8 +45,8 @@ def log_agent_actions(state: Dict[str, Any]) -> None:
             print(f"- 工具: {latest_message.name}")
             # 只打印结果的前200个字符，避免输出过长
             content = latest_message.content
-            if len(content) > 200:
-                content = content[:200] + "... (更多内容省略)"
+            if len(content) > 300:
+                content = content[:300] + "... (更多内容省略)"
             print(f"- 结果: {content}")
     
     print("=" * 50)
@@ -62,7 +58,7 @@ def log_agent_actions(state: Dict[str, Any]) -> None:
 # 创建FireCrawl工具 - 用于网站结构分析
 firecrawl_tool = FireCrawlTool(
     mode="crawl",  # 使用爬取模式
-    params={"max_pages": 5}  # 限制爬取页面数量
+    params={"max_pages": 10}  # 限制爬取页面数量
 )
 
 # 创建Jina Reader工具 - 用于内容提取
@@ -80,7 +76,7 @@ react_agent = create_react_agent(
     prompt=(
         "你是一位专业的网页内容分析专家，擅长提取和分析网站结构与内容。\n"
         "你有两个强大的工具:\n"
-        "1. 'firecrawl_tool': 用于爬取网站结构，了解网站的页面组织方式\n"
+        "1. 'firecrawl_tool': 用于爬取网站结构和下级页面\n"
         "2. 'jina_reader_tool': 用于从特定URL提取结构化内容，获取干净可读的内容\n\n"
         "当面对网站分析任务时，请遵循以下方法论:\n"
         "1. 分析任务: 明确需要从网站获取什么信息\n"
@@ -129,7 +125,7 @@ if __name__ == "__main__":
     # 定义输入
     inputs = {
         "messages": [
-            {"role": "user", "content": "分析LangGraph文档网站(https://langchain-ai.github.io/langgraph/how-tos/)的结构和主要内容，特别关注其核心概念和主要功能模块。"}
+            {"role": "user", "content": "爬取LangGraph文档网站的每个章节的内容(https://langchain-ai.github.io/langgraph/how-tos/) "}
         ]
     }
     

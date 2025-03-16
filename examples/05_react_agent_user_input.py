@@ -6,8 +6,9 @@ from langchain_openai import ChatOpenAI
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from core.agents.react_agent import ReactAgent
-from core.tools.tavily_tools import TavilySearchResults
-
+from langchain_community.tools import TavilySearchResults
+from dotenv import load_dotenv
+load_dotenv()  # 自动加载 .env 文件
 # 初始化大模型
 model = ChatOpenAI(model="gpt-4o-mini")
 

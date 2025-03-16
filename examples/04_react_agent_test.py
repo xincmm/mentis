@@ -1,11 +1,12 @@
-from langgraph.prebuilt import create_react_agent
-from langchain_openai import ChatOpenAI
-from core.tools.tavily_tools import TavilySearchResults
 import os
 import json
+from langgraph.prebuilt import create_react_agent
+from langchain_openai import ChatOpenAI
+from langchain_community.tools import TavilySearchResults
 from typing import Dict, Any
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
-
+from dotenv import load_dotenv
+load_dotenv()  # 自动加载 .env 文件
 # 初始化大模型
 model = ChatOpenAI(model="gpt-4o-mini")
 

@@ -3,9 +3,10 @@ from core.agents.supervisor_agent import SupervisorAgent
 from langchain_openai import ChatOpenAI
 from langgraph.func import entrypoint, task
 from langgraph.graph import add_messages
-
+from dotenv import load_dotenv
+load_dotenv()  # 自动加载 .env 文件
 # 1. 初始化大模型
-model = ChatOpenAI(model="gpt-3.5-turbo")
+model = ChatOpenAI(model="gpt-4o-mini")
 
 ##############################################################################
 # Agent 1: Joke Generator (Functional API)

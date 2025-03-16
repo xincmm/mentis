@@ -14,8 +14,8 @@ from langgraph.prebuilt.chat_agent_executor import (
 from langgraph.pregel import Pregel
 from langgraph.utils.runnable import RunnableCallable
 
-from langgraph_supervisor.agent_name import AgentNameMode, with_agent_name
-from langgraph_supervisor.handoff import (
+from core.agents.supervisor.agent_name import AgentNameMode, with_agent_name
+from core.agents.supervisor.handoff import (
     create_handoff_back_messages,
     create_handoff_tool,
 )

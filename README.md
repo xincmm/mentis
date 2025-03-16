@@ -39,6 +39,7 @@ Mentis 是一个基于 LangGraph 构建的多智能体系统框架，通过 Supe
 ```bash
 uv venv
 uv pip install -r requirements.txt
+uv pip install -e .
 ```
 
 ### 配置环境变量
@@ -69,7 +70,11 @@ JINA_API_KEY=your_jina_api_key
 - FireCrawl API密钥：访问[FireCrawl](https://firecrawl.dev/)注册获取
 - Jina API密钥：访问[Jina AI](https://jina.ai/)注册获取
 
-### 激活虚拟环境
+### 配置环境变量
+
+项目使用第三方API服务，需要配置相应的API密钥。请按照以下步骤设置：
+
+1. 复制 .env.example 文件为 .env：
 
 ```bash
 source .venv/bin/activate  # Linux/macOS
