@@ -68,16 +68,19 @@ class SupervisorAgent(Pregel):
         
         return self._workflow
     
-    def compile(self):
+    def compile(self, checkpointer=None):
         """Compile the supervisor workflow.
         
+        Args:
+            checkpointer: Optional checkpointer for persisting state
+            
         Returns:
             The compiled application
         """
         if self._workflow is None:
             self.build()
         
-        self._app = self._workflow.compile()
+        self._app = self._workflow.compile(checkpointer=checkpointer)
         return self._app
     
     def invoke(self, state: Dict[str, Any]) -> Dict[str, Any]:

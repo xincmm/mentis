@@ -38,8 +38,8 @@ Mentis 是一个基于 LangGraph 构建的多智能体系统框架，通过 Supe
 
 ```bash
 uv venv
-uv pip install -r requirements.txt
-uv pip install -e .
+source .venv/bin/activate
+uv sync
 ```
 
 ### 配置环境变量
