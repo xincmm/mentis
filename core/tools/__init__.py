@@ -5,20 +5,132 @@ from core.tools.firecrawl_tool import FireCrawlTool
 import os
 import importlib
 import inspect
-from typing import Any, Dict, List, Type
+from typing import Any, Dict, List, Type, Optional
 from langchain_core.tools import BaseTool
+
+# 导入预注册所需的工具
+from langchain_community.tools import (
+    TavilySearchResults,
+    JinaSearch,
+    WikipediaQueryRun,
+    ArxivQueryRun,
+)
+from langchain_community.agent_toolkits import FileManagementToolkit
+from langchain_community.agent_toolkits.openapi.toolkit import RequestsToolkit,TextRequestsWrapper
+from langchain_community.tools.riza.command import ExecPython, ExecJavaScript
 
 from dotenv import load_dotenv
 load_dotenv()  # 自动加载 .env 文件
 
-# 注册自定义工具 - FireCrawlTool
-firecrawl_tool = FireCrawlTool()
-register_tool(firecrawl_tool, ToolCategory.WEB_BROWSING)
+# 预注册核心工具列表 - 定义需要预注册的核心工具
+def preregister_core_tools():
+    """预注册核心工具，确保系统启动时这些工具已经可用"""
+    print("开始预注册核心工具...")
+    
+    # 注册搜索类工具
+    try:
+        # Tavily搜索工具
+        tavily_search = TavilySearchResults()
+        register_tool(tavily_search, ToolCategory.SEARCH)
+        print(f"已预注册工具: {tavily_search.name} (类别: {ToolCategory.SEARCH.value})")
+    except Exception as e:
+        print(f"预注册Tavily搜索工具失败: {e}")
+    
+    try:
+        # Jina搜索工具
+        jina_search = JinaSearch()
+        register_tool(jina_search, ToolCategory.SEARCH)
+        print(f"已预注册工具: {jina_search.name} (类别: {ToolCategory.SEARCH.value})")
+    except Exception as e:
+        print(f"预注册Jina搜索工具失败: {e}")
+    
+    try:
+        # Wikipedia查询工具
+        wikipedia_tool = WikipediaQueryRun()
+        register_tool(wikipedia_tool, ToolCategory.SEARCH)
+        print(f"已预注册工具: {wikipedia_tool.name} (类别: {ToolCategory.SEARCH.value})")
+    except Exception as e:
+        print(f"预注册Wikipedia查询工具失败: {e}")
+    
+    # 注册网页浏览类工具
+    try:
+        # Arxiv查询工具
+        arxiv_tool = ArxivQueryRun()
+        register_tool(arxiv_tool, ToolCategory.WEB_BROWSING)
+        print(f"已预注册工具: {arxiv_tool.name} (类别: {ToolCategory.WEB_BROWSING.value})")
+    except Exception as e:
+        print(f"预注册Arxiv查询工具失败: {e}")
+    
+    try:
+        # RequestoolKit请求工具
+        # 创建TextRequestsWrapper实例作为请求包装器
+        requests_wrapper = TextRequestsWrapper(headers={})
+        # 初始化RequestsToolkit，提供必要的参数
+        requests_toolkit = RequestsToolkit(
+            requests_wrapper=requests_wrapper,
+            allow_dangerous_requests=True  # 允许危险请求，使工具可用
+        )
+        for req_tool in requests_toolkit.get_tools():
+            register_tool(req_tool, ToolCategory.WEB_BROWSING)
+            print(f"已预注册工具: {req_tool.name} (类别: {ToolCategory.WEB_BROWSING.value})")
+    except Exception as e:
+        print(f"预注册 RequestoolKit请求工具失败: {e}")
+    
+    # 注册文件系统工具
+    try:
+        # 获取当前目录作为文件系统工具的根目录
+        current_dir = os.getcwd()
+        # 创建文件系统工具集
+        filesystem_toolkit = FileManagementToolkit(
+            root_dir=current_dir,
+            selected_tools=["write_file", "read_file", "list_directory"]
+        )
+        # 获取文件系统工具并注册
+        for fs_tool in filesystem_toolkit.get_tools():
+            register_tool(fs_tool, ToolCategory.FILE_SYSTEM)
+            print(f"已预注册工具: {fs_tool.name} (类别: {ToolCategory.FILE_SYSTEM.value})")
+    except Exception as e:
+        print(f"预注册文件系统工具失败: {e}")
+    
+    # 注册代码解释器工具
+    try:
+        # Python REPL工具
+        python_repl = ExecPython()
+        register_tool(python_repl, ToolCategory.CODE_INTERPRETER)
+        print(f"已预注册工具: {python_repl.name} (类别: {ToolCategory.CODE_INTERPRETER.value})")
+    except Exception as e:
+        print(f"预注册Python REPL工具失败: {e}")
+
+    # 注册代码解释器工具
+    try:
+        # Python REPL工具
+        javascript_repl = ExecJavaScript()
+        register_tool(javascript_repl, ToolCategory.CODE_INTERPRETER)
+        print(f"已预注册工具: {javascript_repl.name} (类别: {ToolCategory.CODE_INTERPRETER.value})")
+    except Exception as e:
+        print(f"预注册Python REPL工具失败: {e}")
+    
+    # 注册自定义工具 - FireCrawl工具
+    try:
+        firecrawl_tool = FireCrawlTool()
+        register_tool(firecrawl_tool, ToolCategory.WEB_BROWSING)
+        print(f"已预注册工具: {firecrawl_tool.name} (类别: {ToolCategory.WEB_BROWSING.value})")
+    except Exception as e:
+        print(f"预注册FireCrawl工具失败: {e}")
+    
+    print("核心工具预注册完成")
+
+# 执行预注册
+preregister_core_tools()
 
 # 注册 LangChain 工具 - 使用load_tools加载的工具列表
-langchain_tools = load_tools(["serpapi"])
-for tool in langchain_tools:
-    register_tool(tool, ToolCategory.SEARCH)
+try:
+    langchain_tools = load_tools(["serpapi"])
+    for tool in langchain_tools:
+        register_tool(tool, ToolCategory.SEARCH)
+        print(f"已注册LangChain工具: {tool.name} (类别: {ToolCategory.SEARCH.value})")
+except Exception as e:
+    print(f"加载LangChain工具失败: {e}")
 
 # 工具类别映射 - 用于自动分类直接导入的工具
 tool_category_mapping = {
@@ -28,6 +140,7 @@ tool_category_mapping = {
     "GoogleSearchResults": ToolCategory.SEARCH,
     "GoogleSerperResults": ToolCategory.SEARCH,
     "WikipediaQueryRun": ToolCategory.SEARCH,
+    "FireCrawl": ToolCategory.SEARCH,
     
     # 网页浏览类工具
     "WebBrowser": ToolCategory.WEB_BROWSING,

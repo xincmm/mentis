@@ -15,9 +15,12 @@ class ToolCategory(Enum):
 _registered_tools = {}
 
 def register_tool(tool: Tool, category: ToolCategory) -> None:
-    """注册一个工具到全局字典中，带有分类信息"""
+    """注册一个工具到全局字典中，带有分类信息
+    
+    如果工具名已存在，将覆盖现有的工具注册信息
+    """
     if tool.name in _registered_tools:
-        raise ValueError(f"工具名 {tool.name} 已存在，请确保工具名唯一")
+        print(f"警告: 工具名 {tool.name} 已存在，将覆盖现有注册信息")
     _registered_tools[tool.name] = {
         "tool": tool,
         "category": category

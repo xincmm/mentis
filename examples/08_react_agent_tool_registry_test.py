@@ -73,11 +73,13 @@ jina_search = JinaSearch()
 # 创建Wikipedia工具实例
 wiki_tool = WikipediaQueryRun(api_wrapper=WikipediaAPIWrapper())
 
+firecrawl_tool = FireCrawlTool()
+
 # 使用register_direct_tool函数注册工具
 register_direct_tool(jina_search)
 register_direct_tool(wiki_tool)
-
-# 注意：FireCrawlTool已经在core/tools/__init__.py中被注册，这里不需要再次注册
+register_direct_tool(firecrawl_tool)
+# 注册自定义工具 - FireCrawlTool
 
 # 获取所有已注册的工具（以字典格式）
 registered_tools = get_registered_tools(as_dict=True)
@@ -96,8 +98,9 @@ print_separator("创建ReactAgent实例")
 # 初始化大模型
 model = ChatOpenAI(model="gpt-4o-mini")
 
-# 从注册表中获取工具列表
-tools_list = [info["tool"] for info in registered_tools.values()]
+# 从注册表中只获取搜索类工具列表
+from core.tools.registry import get_tools_by_category, ToolCategory
+tools_list = get_tools_by_category(ToolCategory.SEARCH)
 
 # 创建ReactAgent实例
 react_agent = ReactAgent(
