@@ -2,6 +2,7 @@
 from langchain_community.agent_toolkits.load_tools import load_tools
 from core.tools.registry import register_tool, ToolCategory, get_registered_tools
 from core.tools.firecrawl_tool import FireCrawlTool
+from core.tools.e2b_tool import E2BCodeInterpreterTool
 import os
 import importlib
 import inspect
@@ -118,7 +119,15 @@ def preregister_core_tools():
     except Exception as e:
         print(f"预注册FireCrawl工具失败: {e}")
     
-    print("核心工具预注册完成")
+    # 注册E2B代码解释器工具
+    try:
+        e2b_tool = E2BCodeInterpreterTool()
+        register_tool(e2b_tool, ToolCategory.CODE_INTERPRETER)
+        print(f"已预注册工具: {e2b_tool.name} (类别: {ToolCategory.CODE_INTERPRETER.value})")
+    except Exception as e:
+        print(f"预注册E2B代码解释器工具失败: {e}")
+
+print("核心工具预注册完成")
 
 # 执行预注册
 preregister_core_tools()
@@ -156,6 +165,7 @@ tool_category_mapping = {
     # 代码解释器类工具
     "PythonREPL": ToolCategory.CODE_INTERPRETER,
     "ShellTool": ToolCategory.CODE_INTERPRETER,
+    "E2BCodeInterpreterTool": ToolCategory.CODE_INTERPRETER,
     
     # 数据库类工具
     "SQLDatabaseTool": ToolCategory.DATABASE,
