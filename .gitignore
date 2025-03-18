@@ -44,3 +44,7 @@ Thumbs.db
 
 # Env
 .env
+
+# output
+exampels/output/
+examples/output/sandbox_files/

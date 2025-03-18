@@ -166,18 +166,32 @@ def download_file_from_sandbox(sandbox, sandbox_path, local_path):
     try:
         # 从沙箱读取文件内容
         content = sandbox.files.read(sandbox_path)
+        print(f"读取文件: {sandbox_path}, 返回类型: {type(content)}")
         
         # 确保目标目录存在
         os.makedirs(os.path.dirname(local_path), exist_ok=True)
         
-        # 判断是否为二进制文件
-        binary_extensions = ['.png', '.jpg', '.jpeg', '.gif', '.pdf', '.svg', '.xlsx', '.xls', '.zip', '.bin']
+        # 判断是否为二进制文件 - 扩展支持的二进制文件类型
+        binary_extensions = ['.png', '.jpg', '.jpeg', '.gif', '.pdf', '.svg', 
+                             '.xlsx', '.xls', '.zip', '.bin', '.pyc', '.pyd',
+                             '.pptx', '.docx', '.mp3', '.mp4', '.avi', '.mov']
         is_binary = any(sandbox_path.lower().endswith(ext) for ext in binary_extensions)
         
-        # 根据文件类型选择写入模式
         if is_binary:
+            print(f"处理二进制文件: {sandbox_path}")
             with open(local_path, 'wb') as file:
-                file.write(content.encode() if isinstance(content, str) else content)
+                # 如果内容是字符串，尝试使用不同的编码方式
+                if isinstance(content, str):
+                    # 尝试多种编码方式，优先使用utf-8，如果失败则尝试latin1和base64
+                    try:
+                        print(f"警告: {sandbox_path}返回内容为字符串，尝试使用utf-8编码")
+                        file.write(content.encode('utf-8', errors='replace'))
+                    except Exception as e:
+                        print(f"utf-8编码失败，尝试使用latin1编码: {str(e)}")
+                        file.write(content.encode('latin1', errors='replace'))
+                else:
+                    # 直接写入二进制内容
+                    file.write(content)
         else:
             with open(local_path, 'w', encoding='utf-8') as file:
                 file.write(content)
@@ -200,31 +214,72 @@ def download_directory_from_sandbox(sandbox, sandbox_dir_path, local_dir_path):
         bool: 是否成功下载所有文件
     """
     try:
+        print(f"尝试下载目录: {sandbox_dir_path} -> {local_dir_path}")
+        
         # 确保本地目录存在
         os.makedirs(local_dir_path, exist_ok=True)
         
         # 列出沙箱中指定目录下的所有文件
-        files = sandbox.filesystem.list(sandbox_dir_path)
+        try:
+            files = sandbox.files.list(sandbox_dir_path)
+            print(f"获取到文件列表: {sandbox_dir_path}, 类型: {type(files)}")
+            if files and len(files) > 0:
+                print(f"第一个文件类型: {type(files[0])}, 内容: {files[0]}")
+                # 检查对象属性
+                print(f"文件对象可用属性: {dir(files[0])}")
+        except Exception as e:
+            print(f"列出文件时出错: {sandbox_dir_path}, 错误: {str(e)}")
+            return False
         
         if not files:
             print(f"沙箱中目录 {sandbox_dir_path} 为空或不存在")
             return False
             
         downloaded_count = 0
+        # 定义需要跳过的系统文件
+        skip_files = {'.bashrc', '.bash_logout', '.profile'}
         
         # 遍历并下载每个文件
         for file_info in files:
-            sandbox_file_path = f"{sandbox_dir_path}/{file_info['name']}"
-            local_file_path = os.path.join(local_dir_path, file_info['name'])
-            
-            if file_info['type'] == 'directory':
-                # 递归下载子目录
-                if download_directory_from_sandbox(sandbox, sandbox_file_path, local_file_path):
-                    downloaded_count += 1
-            else:
-                # 下载文件
-                if download_file_from_sandbox(sandbox, sandbox_file_path, local_file_path):
-                    downloaded_count += 1
+            try:
+                # 使用dir()查看对象有哪些属性
+                print(f"文件信息对象属性: {dir(file_info)}")
+                
+                # 尝试安全获取name和type属性
+                file_name = getattr(file_info, "name", None)
+                if file_name is None:
+                    print(f"警告: 无法获取文件名, 跳过此文件")
+                    continue
+                    
+                file_type = getattr(file_info, "type", "file")  # 默认为文件类型
+                # 如果 file_type 是枚举, 使用其 value 进行判断
+                type_value = file_type.value if hasattr(file_type, "value") else file_type
+                
+                # 跳过不需要的系统文件或系统目录（隐藏文件/目录）
+                if file_name in skip_files or (file_name.startswith('.') and type_value == 'dir'):
+                    print(f"跳过系统文件或目录: {file_name}")
+                    continue
+                
+                print(f"处理文件: {file_name}, 类型: {type_value}")
+                
+                sandbox_file_path = f"{sandbox_dir_path}/{file_name}"
+                local_file_path = os.path.join(local_dir_path, file_name)
+                
+                if type_value == 'dir':
+                    # 递归下载子目录
+                    print(f"发现子目录: {sandbox_file_path}")
+                    if download_directory_from_sandbox(sandbox, sandbox_file_path, local_file_path):
+                        downloaded_count += 1
+                else:
+                    # 下载文件
+                    print(f"下载文件: {sandbox_file_path} -> {local_file_path}")
+                    if download_file_from_sandbox(sandbox, sandbox_file_path, local_file_path):
+                        downloaded_count += 1
+            except Exception as e:
+                print(f"处理文件时出错: {str(e)}")
+                import traceback
+                print(f"详细错误跟踪: {traceback.format_exc()}")
+                continue
         
         if downloaded_count > 0:
             print(f"从 {sandbox_dir_path} 下载了 {downloaded_count} 个文件/目录到 {local_dir_path}")
@@ -233,6 +288,8 @@ def download_directory_from_sandbox(sandbox, sandbox_dir_path, local_dir_path):
         
     except Exception as e:
         print(f"从沙箱下载目录时出错: {str(e)}")
+        import traceback
+        print(f"详细错误跟踪: {traceback.format_exc()}")
         return False
 
 ##############################################################################
@@ -267,41 +324,44 @@ if __name__ == "__main__":
         # 使用log_agent_actions函数记录状态
         log_agent_actions({"messages": [latest_message]})
     
-    # 打印最终回答
     print_separator("最终回答")
     if final_state and final_state.get("messages"):
         for message in final_state["messages"]:
             if isinstance(message, AIMessage) and not message.tool_calls:
                 print(message.content)
-                
-                # # 检查是否有E2B沙箱实例并下载文件
-                # for msg in final_state["messages"]:
-                #     if isinstance(msg, ToolMessage) and msg.name == "e2b_code_interpreter":
-                #         try:
-                #             # 获取沙箱实例
-                #             if 'sandbox' in dir(react_agent.tools[0]):
-                #                 sandbox = react_agent.tools[0].sandbox
-                                
-                #                 # 设置输出目录
-                #                 output_dir = os.path.join(os.path.dirname(__file__), "output")
-                #                 os.makedirs(output_dir, exist_ok=True)
-                                
-                #                 # 直接下载主要工作目录
-                #                 print("\n从沙箱下载文件到本地...")
-                #                 download_directory_from_sandbox(sandbox, "/home/user", output_dir)
-                                
-                #                 # 下载临时目录中可能的图表和数据文件
-                #                 download_directory_from_sandbox(sandbox, "/tmp", output_dir)
-                                
-                #                 print(f"\n文件已保存到目录: {output_dir}")
-                #         except Exception as e:
-                #             print(f"从沙箱下载文件时出错: {str(e)}")              
-    
-    # 关闭E2B沙箱
-    for tool in react_agent.tools:
-        if hasattr(tool, 'close'):
-            tool.close()
 
-# 工具调用:
-# - 工具: e2b_code_interpreter
-# - 参数: {'code': "import pandas as pd\nimport numpy as np\nimport matplotlib.pyplot as plt\n\n# 设置随机数种子，以便结果可重复\nnp.random.seed(42)\n\n# 生成模拟的财务数据\nnum_months = 12\nmonths = pd.date_range(start='2023-01-01', periods=num_months, freq='M')\n\n# 随机生成收入、支出、利润\nrevenue = np.random.randint(10000, 50000, num_months)\nexpenses = np.random.randint(5000, 20000, num_months)\nprofit = revenue - expenses\n\n# 创建 DataFrame\ndata = pd.DataFrame({'Month': months, 'Revenue': revenue, 'Expenses': expenses, 'Profit': profit})\n\ndata.set_index('Month', inplace=True)\n\n# 计算总收入、总支出、总利润\ntotal_revenue = data['Revenue'].sum()\ntotal_expenses = data['Expenses'].sum()\ntotal_profit = data['Profit'].sum()\n\n# 输出分析结果\nanalysis_results = {'Total Revenue': total_revenue, 'Total Expenses': total_expenses, 'Total Profit': total_profit}\n\n# 可视化数据\t\nplt.figure(figsize=(10, 5))\nplt.plot(data.index, data['Revenue'], label='Revenue', marker='o')\nplt.plot(data.index, data['Expenses'], label='Expenses', marker='o')\nplt.plot(data.index, data['Profit'], label='Profit', marker='o')\nplt.title('Monthly Financial Data')\nplt.xlabel('Month')\nplt.ylabel('Amount ($)')\nplt.legend()\nplt.grid()\n\n# 创建output目录用于存储生成的文件\nimport os\noutput_dir = '/home/user/output'\nos.makedirs(output_dir, exist_ok=True)\n\n# 保存图表到output目录\nmonthly_chart_path = os.path.join(output_dir, 'monthly_financial_data.png')\nplt.savefig(monthly_chart_path)\n\n# 保存数据和分析结果到 CSV 文件\ncsv_path = os.path.join(output_dir, 'financial_data.csv')\ndata.to_csv(csv_path)\n\n# 创建财务分析报告\nreport = f\"\"\"# 财务数据分析报告\n\n## 概述\n\n本报告分析了2023年1月至12月的财务数据，包括收入、支出和利润情况。\n\n## 财务摘要\n\n- **总收入**: ${total_revenue:,}\n- **总支出**: ${total_expenses:,}\n- **总利润**: ${total_profit:,}\n- **平均月收入**: ${data['Revenue'].mean():,.2f}\n- **平均月支出**: ${data['Expenses'].mean():,.2f}\n- **平均月利润**: ${data['Profit'].mean():,.2f}\n\n## 月度表现\n\n- **最高收入月**: {data['Revenue'].idxmax().strftime('%Y年%m月')} (${data['Revenue'].max():,})\n- **最低收入月**: {data['Revenue'].idxmin().strftime('%Y年%m月')} (${data['Revenue'].min():,})\n- **最高利润月**: {data['Profit'].idxmax().strftime('%Y年%m月')} (${data['Profit'].max():,})\n- **最低利润月**: {data['Profit'].idxmin().strftime('%Y年%m月')} (${data['Profit'].min():,})\n\n## 趋势分析\n\n收入趋势: {\"上升\" if data['Revenue'].iloc[-1] > data['Revenue'].iloc[0] else \"下降\"}\n支出趋势: {\"上升\" if data['Expenses'].iloc[-1] > data['Expenses'].iloc[0] else \"下降\"}\n利润趋势: {\"上升\" if data['Profit'].iloc[-1] > data['Profit'].iloc[0] else \"下降\"}\n\n## 结论与建议\n\n根据分析结果，提出以下建议：\n\n1. {\"增加营销投入以提高收入\" if data['Revenue'].mean() < 30000 else \"维持当前营销策略\"}\n2. {\"控制支出\" if data['Expenses'].mean() > 15000 else \"可适当增加投资\"}\n3. {\"关注利润率提升\" if (data['Profit'] / data['Revenue']).mean() < 0.5 else \"保持良好的利润率\"}\n\n## 附件\n\n- 月度财务数据图表 (monthly_financial_data.png)\n- 财务数据CSV文件 (financial_data.csv)\"\"\"\n\n# 保存报告到文件\nreport_path = os.path.join(output_dir, 'financial_analysis_report.md')\nwith open(report_path, 'w', encoding='utf-8') as f:\n    f.write(report)\n\n# 返回分析结果和文件路径信息\nanalysis_results"}
+                # 检查是否有 E2B 沙箱实例并下载文件
+                for msg in final_state["messages"]:
+                    if hasattr(msg, "name") and msg.name == "e2b_code_interpreter":
+                        try:
+                            # 遍历 react_agent.tools 以查找 E2B 相关工具
+                            sandbox = None
+                            for tool in react_agent.tools:
+                                if hasattr(tool, "sandbox"):
+                                    sandbox = tool.sandbox
+                                    break  # 找到后就退出循环
+
+                            if sandbox:
+                                # 设定输出目录
+                                output_dir = os.path.join(os.getcwd(), "examples/output/sandbox_files")
+                                os.makedirs(output_dir, exist_ok=True)
+
+                                # 直接下载主要工作目录
+                                print("\n从沙箱下载文件到本地...")
+                                download_directory_from_sandbox(sandbox, "/home/user", output_dir)
+
+                                # 下载临时目录中可能的图表和数据文件
+                                download_directory_from_sandbox(sandbox, "/tmp", output_dir)
+
+                                print(f"\n文件已保存到目录: {output_dir}")
+
+                        except Exception as e:
+                            print(f"从沙箱下载文件时出错: {str(e)}")
+
+    # 关闭 E2B 沙箱
+    for tool in react_agent.tools:
+        if hasattr(tool, "close"):
+            try:
+                tool.close()
+            except Exception as e:
+                print(f"关闭工具时出错: {str(e)}")
