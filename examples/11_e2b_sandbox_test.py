@@ -225,6 +225,23 @@ react_agent = ReactAgent(
     ),
 )
 
+# 添加调试信息，验证工具列表和沙箱实例的初始状态
+print("\n验证ReactAgent工具列表和沙箱实例初始状态:")
+print(f"react_agent.tools类型: {type(react_agent.tools)}")
+print(f"react_agent.tools长度: {len(react_agent.tools)}")
+
+# 遍历所有工具，检查是否有sandbox属性
+for i, tool in enumerate(react_agent.tools):
+    print(f"\n工具[{i}]类型: {type(tool)}")
+    print(f"工具[{i}]名称: {getattr(tool, 'name', '未知')}")
+    print(f"工具[{i}]是否有sandbox属性: {'sandbox' in dir(tool)}")
+    
+    # 如果有sandbox属性，打印沙箱实例信息
+    if 'sandbox' in dir(tool):
+        print(f"工具[{i}]的sandbox类型: {type(tool.sandbox)}")
+        print(f"工具[{i}]的sandbox是否可用: {getattr(tool, '_is_available', False)}")
+        print(f"工具[{i}]的初始化错误: {getattr(tool, '_init_error', None)}")
+
 # 编译Agent
 agent = react_agent.compile()
 
@@ -333,20 +350,48 @@ def run_test_case_2():
                         try:
                             # 尝试解析工具消息内容
                             tool_output = json.loads(msg.content)
+                            print(f"\n工具消息内容解析成功: {type(tool_output)}")
                             
                             # 检查是否有原始输出
                             if hasattr(msg, 'raw_output') and msg.raw_output:
-                                # 获取沙箱实例
-                                if 'sandbox' in dir(react_agent.tools[0]):
-                                    sandbox = react_agent.tools[0].sandbox
+                                print(f"\n消息包含raw_output属性: {type(msg.raw_output)}")
+                                
+                                # 打印react_agent.tools的信息
+                                print(f"\nreact_agent.tools类型: {type(react_agent.tools)}")
+                                print(f"react_agent.tools长度: {len(react_agent.tools)}")
+                                
+                                # 遍历所有工具，检查是否有sandbox属性
+                                for i, tool in enumerate(react_agent.tools):
+                                    print(f"\n工具[{i}]类型: {type(tool)}")
+                                    print(f"工具[{i}]名称: {getattr(tool, 'name', '未知')}")
+                                    print(f"工具[{i}]是否有sandbox属性: {'sandbox' in dir(tool)}")
+                                    if 'sandbox' in dir(tool):
+                                        print(f"工具[{i}]的sandbox类型: {type(tool.sandbox)}")
+                                
+                                # 遍历 react_agent.tools 以查找 E2B 相关工具
+                                sandbox = None
+                                for tool in react_agent.tools:
+                                    if hasattr(tool, "sandbox"):
+                                        sandbox = tool.sandbox
+                                        break  # 找到后就退出循环
+                                
+                                if sandbox:
+                                    print("\n成功获取沙箱实例!")
+                                    print(f"沙箱实例类型: {type(sandbox)}")
                                     
                                     # 从沙箱下载生成的文件
                                     output_dir = os.path.join(os.path.dirname(__file__), "output", "sandbox_test")
                                     os.makedirs(output_dir, exist_ok=True)
+                                    print(f"输出目录已创建: {output_dir}")
                                     
                                     # 尝试下载测试目录
                                     sandbox_test_path = "/home/user/test_dir"
+                                    print(f"尝试从沙箱下载目录: {sandbox_test_path}")
                                     download_directory_from_sandbox(sandbox, sandbox_test_path, os.path.join(output_dir, "test_dir"))
+                                else:
+                                    print("\n错误: 无法获取沙箱实例，没有找到具有sandbox属性的工具")
+                            else:
+                                print("\n错误: 消息没有raw_output属性")
                         except Exception as e:
                             print(f"处理工具消息时出错: {str(e)}")
 
@@ -432,15 +477,37 @@ def run_test_case_4():
                 for msg in final_state["messages"]:
                     if isinstance(msg, ToolMessage) and msg.name == "e2b_code_interpreter":
                         try:
-                            if 'sandbox' in dir(react_agent.tools[0]):
-                                sandbox = react_agent.tools[0].sandbox
+                            print(f"\n测试用例4: 检查工具消息类型: {type(msg)}")
+                            print(f"测试用例4: 工具消息名称: {msg.name}")
+                            
+                            # 检查react_agent.tools的信息
+                            print(f"\n测试用例4: react_agent.tools类型: {type(react_agent.tools)}")
+                            print(f"测试用例4: react_agent.tools长度: {len(react_agent.tools)}")
+                            
+                            # 遍历 react_agent.tools 以查找 E2B 相关工具
+                            sandbox = None
+                            for tool in react_agent.tools:
+                                if hasattr(tool, "sandbox"):
+                                    sandbox = tool.sandbox
+                                    break  # 找到后就退出循环
+                            
+                            if sandbox:
+                                print("\n测试用例4: 成功获取沙箱实例!")
+                                print(f"测试用例4: 沙箱实例类型: {type(sandbox)}")
+                                print(f"测试用例4: 沙箱实例属性: {dir(sandbox)[:10]}...")
+                                
                                 output_dir = os.path.join(os.path.dirname(__file__), "output", "sandbox_test")
                                 os.makedirs(output_dir, exist_ok=True)
+                                print(f"测试用例4: 输出目录已创建: {output_dir}")
                                 
                                 # 尝试下载shell命令结果文件
                                 sandbox_file_path = "/home/user/shell_commands_results.txt"
                                 local_file_path = os.path.join(output_dir, "shell_commands_results.txt")
+                                print(f"测试用例4: 尝试下载文件: {sandbox_file_path} -> {local_file_path}")
                                 download_file_from_sandbox(sandbox, sandbox_file_path, local_file_path)
+                            else:
+                                print("\n测试用例4: 错误: 无法获取沙箱实例，没有找到具有sandbox属性的工具")
+                                print(f"测试用例4: react_agent.tools的类型和长度: {type(react_agent.tools)}, {len(react_agent.tools)}")
                         except Exception as e:
                             print(f"下载文件时出错: {str(e)}")
 
@@ -487,13 +554,21 @@ def run_test_case_5():
                 for msg in final_state["messages"]:
                     if isinstance(msg, ToolMessage) and msg.name == "e2b_code_interpreter":
                         try:
-                            if 'sandbox' in dir(react_agent.tools[0]):
-                                sandbox = react_agent.tools[0].sandbox
+                            # 遍历 react_agent.tools 以查找 E2B 相关工具
+                            sandbox = None
+                            for tool in react_agent.tools:
+                                if hasattr(tool, "sandbox"):
+                                    sandbox = tool.sandbox
+                                    break  # 找到后就退出循环
+                            
+                            if sandbox:
                                 output_dir = os.path.join(os.path.dirname(__file__), "output", "sandbox_test")
                                 os.makedirs(output_dir, exist_ok=True)
                                 
                                 # 尝试下载图表文件
                                 download_directory_from_sandbox(sandbox, "/home/user", output_dir)
+                            else:
+                                print("\n错误: 无法获取沙箱实例，没有找到具有sandbox属性的工具")
                         except Exception as e:
                             print(f"下载文件时出错: {str(e)}")
 
@@ -544,22 +619,22 @@ if __name__ == "__main__":
     print_separator("开始测试E2B沙箱环境")
     
     try:
-        # 运行测试用例1：基本Python代码执行和环境信息
-        run_test_case_1()
+        # # 运行测试用例1：基本Python代码执行和环境信息
+        # run_test_case_1()
         
-        # 运行测试用例2：文件系统操作
+        # # 运行测试用例2：文件系统操作
         run_test_case_2()
         
-        # 运行测试用例3：包管理和第三方库使用
+        # # 运行测试用例3：包管理和第三方库使用
         run_test_case_3()
         
         # 运行测试用例4：Shell命令执行
         run_test_case_4()
         
-        # 运行测试用例5：数据处理和可视化
+        # # 运行测试用例5：数据处理和可视化
         run_test_case_5()
         
-        # 运行测试用例6：异常处理和错误恢复
+        # # 运行测试用例6：异常处理和错误恢复
         run_test_case_6()
         
         print_separator("E2B沙箱环境测试完成")
