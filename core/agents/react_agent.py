@@ -1,4 +1,4 @@
-from typing import Any, Callable, Dict, List, Optional, Type, Union, Literal
+from typing import Any, Callable, Dict, List, Optional, Type, Union, Literal, Sequence
 
 from langchain_core.language_models import LanguageModelLike
 from langchain_core.tools import BaseTool
@@ -10,6 +10,8 @@ from langgraph.prebuilt.chat_agent_executor import (
     StructuredResponseSchema,
 )
 from langgraph.pregel import Pregel
+from langgraph.checkpoint import Checkpointer
+from langgraph.checkpoint.base import BaseStore
 
 
 class ReactAgent(Pregel):
@@ -87,16 +89,44 @@ class ReactAgent(Pregel):
         
         return self._workflow
     
-    def compile(self):
+    def compile(
+        self,
+        checkpointer: Optional[Checkpointer] = None,
+        *,
+        store: Optional[BaseStore] = None,
+        interrupt_before: Optional[Union[Literal["All"], list[str]]] = None,
+        interrupt_after: Optional[Union[Literal["All"], list[str]]] = None,
+        debug: bool = False,
+        name: Optional[str] = None,
+    ):
         """Compile the ReAct agent workflow.
         
+        Args:
+            checkpointer: Optional checkpointer for persisting state.
+                If provided, this Checkpointer serves as a fully versioned "short-term memory" for the graph,
+                allowing it to be paused, resumed, and replayed from any point.
+                If None, it may inherit the parent graph's checkpointer when used as a subgraph.
+                If False, it will not use or inherit any checkpointer.
+            store: Optional store for persisting state.
+            interrupt_before: An optional list of node names to interrupt before.
+            interrupt_after: An optional list of node names to interrupt after.
+            debug: A flag indicating whether to enable debug mode.
+            name: Optional name for the compiled graph.
+            
         Returns:
             The compiled application
         """
         if self._workflow is None:
             self.build()
         
-        self._app = self._workflow
+        self._app = self._workflow.compile(
+            checkpointer=checkpointer,
+            store=store,
+            interrupt_before=interrupt_before,
+            interrupt_after=interrupt_after,
+            debug=debug,
+            name=name
+        )
         return self._app
     
     def invoke(self, state: Dict[str, Any]) -> Dict[str, Any]:

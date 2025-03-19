@@ -2,15 +2,15 @@ from typing import Any, Callable, Dict, List, Optional, Union
 
 from langchain_core.language_models import LanguageModelLike
 from langchain_core.tools import BaseTool
-from langgraph.graph import END, START, StateGraph
+from langgraph.graph import StateGraph
 from langgraph.prebuilt.chat_agent_executor import (
     AgentState,
     StateSchemaType,
 )
-from langgraph.pregel import Pregel
 from core.agents.supervisor import create_supervisor
+from core.agents.react_agent import ReactAgent
 
-class SupervisorAgent(Pregel):
+class SupervisorAgent(ReactAgent):
     """Supervisor class for managing multiple agents.
     
     This class provides a high-level interface for creating a supervisor workflow
@@ -19,7 +19,7 @@ class SupervisorAgent(Pregel):
     
     def __init__(
         self,
-        agents: List[Pregel],
+        agents: List[ReactAgent],
         model: LanguageModelLike,
         tools: Optional[List[Union[BaseTool, Callable]]] = None,
         prompt: Optional[str] = None,
@@ -39,15 +39,19 @@ class SupervisorAgent(Pregel):
             output_mode: Mode for adding agent outputs to the message history
                 ("full_history" or "last_message")
         """
+        # Initialize the ReactAgent parent class
+        super().__init__(
+            model=model,
+            tools=tools,
+            prompt=prompt,
+            state_schema=state_schema,
+            name=supervisor_name,
+        )
+        
+        # Store supervisor-specific attributes
         self.agents = agents
-        self.model = model
-        self.tools = tools or []
-        self.prompt = prompt
-        self.state_schema = state_schema
-        self.supervisor_name = supervisor_name
         self.output_mode = output_mode
-        self._workflow = None
-        self._app = None
+        self.supervisor_name = supervisor_name
     
     def build(self) -> StateGraph:
         """Build the supervisor workflow.
@@ -67,46 +71,3 @@ class SupervisorAgent(Pregel):
         )
         
         return self._workflow
-    
-    def compile(self, checkpointer=None):
-        """Compile the supervisor workflow.
-        
-        Args:
-            checkpointer: Optional checkpointer for persisting state
-            
-        Returns:
-            The compiled application
-        """
-        if self._workflow is None:
-            self.build()
-        
-        self._app = self._workflow.compile(checkpointer=checkpointer)
-        return self._app
-    
-    def invoke(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        """Invoke the supervisor with the given state.
-        
-        Args:
-            state: Current state of the conversation
-            
-        Returns:
-            Updated state after supervisor processing
-        """
-        if self._app is None:
-            self.compile()
-        
-        return self._app.invoke(state)
-    
-    async def ainvoke(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        """Asynchronously invoke the supervisor with the given state.
-        
-        Args:
-            state: Current state of the conversation
-            
-        Returns:
-            Updated state after supervisor processing
-        """
-        if self._app is None:
-            self.compile()
-        
-        return await self._app.ainvoke(state)

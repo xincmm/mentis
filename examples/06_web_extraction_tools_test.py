@@ -7,7 +7,7 @@ from typing import Dict, Any
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from dotenv import load_dotenv
 from langchain_community.tools import JinaSearch
-from core.tools.firecrawl_tools import FireCrawlTool
+from core.tools.firecrawl_tool import FireCrawlTool
 
 
 load_dotenv()  # 自动加载 .env 文件
