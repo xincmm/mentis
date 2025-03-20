@@ -10,8 +10,7 @@ from langgraph.prebuilt.chat_agent_executor import (
     StructuredResponseSchema,
 )
 from langgraph.pregel import Pregel
-from langgraph.checkpoint import Checkpointer
-from langgraph.checkpoint.base import BaseStore
+# 移除不存在的导入
 
 
 class ReactAgent(Pregel):
@@ -91,9 +90,9 @@ class ReactAgent(Pregel):
     
     def compile(
         self,
-        checkpointer: Optional[Checkpointer] = None,
+        checkpointer: Optional[Any] = None,
         *,
-        store: Optional[BaseStore] = None,
+        store: Optional[Any] = None,
         interrupt_before: Optional[Union[Literal["All"], list[str]]] = None,
         interrupt_after: Optional[Union[Literal["All"], list[str]]] = None,
         debug: bool = False,
