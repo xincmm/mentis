@@ -3,6 +3,9 @@ from typing import Any, Callable, Dict, List, Optional, Type, Union, Literal, Se
 from langchain_core.language_models import LanguageModelLike
 from langchain_core.tools import BaseTool
 from langgraph.graph import StateGraph
+from langgraph.graph.graph import CompiledGraph
+from langgraph.types import Checkpointer
+from langgraph.store.base import BaseStore
 from langgraph.prebuilt import create_react_agent
 from langgraph.prebuilt.chat_agent_executor import (
     AgentState,
@@ -10,7 +13,6 @@ from langgraph.prebuilt.chat_agent_executor import (
     StructuredResponseSchema,
 )
 from langgraph.pregel import Pregel
-# 移除不存在的导入
 
 
 class ReactAgent(Pregel):
@@ -30,6 +32,8 @@ class ReactAgent(Pregel):
         ] = None,
         state_schema: StateSchemaType = AgentState,
         config_schema: Type[Any] = None,
+        checkpointer: Optional[Checkpointer] = None,
+        store: Optional[BaseStore] = None,
         interrupt_before: Optional[List[str]] = None,
         interrupt_after: Optional[List[str]] = None,
         debug: bool = False,
@@ -57,28 +61,34 @@ class ReactAgent(Pregel):
         self.response_format = response_format
         self.state_schema = state_schema
         self.config_schema = config_schema
+        self.checkpointer = checkpointer
+        self.store = store
         self.interrupt_before = interrupt_before
         self.interrupt_after = interrupt_after
         self.debug = debug
         self.version = version
         self.name = name
-        self._workflow = None
         self._app = None
     
-    def build(self) -> StateGraph:
+    def build(self) -> CompiledGraph:
         """Build the ReAct agent workflow.
         
         Returns:
-            The built StateGraph
+            The built CompiledGraph
         """
-        
-        self._workflow = create_react_agent(
+        # 如果_app已经存在，直接返回，避免重复构建
+        if self._app is not None:
+            return self._app
+            
+        self._app = create_react_agent(
             model=self.model,
             tools=self.tools,
             prompt=self.prompt,
             response_format=self.response_format,
             state_schema=self.state_schema,
             config_schema=self.config_schema,
+            checkpointer=self.checkpointer,
+            store=self.store,
             interrupt_before=self.interrupt_before,
             interrupt_after=self.interrupt_after,
             debug=self.debug,
@@ -86,13 +96,13 @@ class ReactAgent(Pregel):
             name=self.name,
         )
         
-        return self._workflow
+        return self._app
     
     def compile(
         self,
-        checkpointer: Optional[Any] = None,
+        checkpointer: Optional[Checkpointer] = None,
         *,
-        store: Optional[Any] = None,
+        store: Optional[BaseStore] = None,
         interrupt_before: Optional[Union[Literal["All"], list[str]]] = None,
         interrupt_after: Optional[Union[Literal["All"], list[str]]] = None,
         debug: bool = False,
@@ -115,17 +125,10 @@ class ReactAgent(Pregel):
         Returns:
             The compiled application
         """
-        if self._workflow is None:
+        # 如果_app已经存在，直接返回，避免重复编译
+        if self._app is None:
             self.build()
-        
-        self._app = self._workflow.compile(
-            checkpointer=checkpointer,
-            store=store,
-            interrupt_before=interrupt_before,
-            interrupt_after=interrupt_after,
-            debug=debug,
-            name=name
-        )
+            
         return self._app
     
     def invoke(self, state: Dict[str, Any]) -> Dict[str, Any]:
@@ -137,6 +140,7 @@ class ReactAgent(Pregel):
         Returns:
             Updated state after agent processing
         """
+        # 确保应用已编译
         if self._app is None:
             self.compile()
         
@@ -151,6 +155,7 @@ class ReactAgent(Pregel):
         Returns:
             Updated state after agent processing
         """
+        # 确保应用已编译
         if self._app is None:
             self.compile()
         
@@ -169,18 +174,32 @@ class ReactAgent(Pregel):
         Returns:
             Iterator over intermediate states
         """
+        # 确保应用已编译
         if self._app is None:
             self.compile()
         
         return self._app.stream(state, **kwargs)
     
-    def get_graph(self) -> StateGraph:
+    def get_graph(self) -> CompiledGraph:
         """Get the underlying graph of the ReAct agent.
         
         Returns:
-            The StateGraph object
+            The CompiledGraph object
         """
-        if self._workflow is None:
+        if self._app is None:
             self.build()
         
-        return self._workflow
+        return self._app
+    
+    def reset(self):
+        """Reset the agent's state.
+        
+        This method resets the agent's state by clearing the checkpointer's checkpoint.
+        It allows the agent to be reused for new conversations.
+        """
+        # 重置checkpointer状态
+        if self.checkpointer:
+            self.checkpointer.checkpoint = None
+            
+        # 重置_app，以便下次使用时重新构建
+        self._app = None

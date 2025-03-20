@@ -4,15 +4,17 @@ import re
 from langchain_core.language_models import LanguageModelLike
 from langchain_core.tools import BaseTool
 from langgraph.graph import StateGraph
+from langgraph.graph.state import CompiledStateGraph
 from langgraph.prebuilt.chat_agent_executor import (
     AgentState,
     StateSchemaType,
 )
 from core.agents.supervisor import create_supervisor
+from core.agents.base.base_agent import BaseAgent
 from core.agents.react_agent import ReactAgent
 from core.tools.todolist_tool import TodolistTool
 
-class SupervisorAgent(ReactAgent):
+class SupervisorAgent(BaseAgent):
     """Supervisor class for managing multiple agents with planning capabilities.
     
     This class provides a high-level interface for creating a supervisor workflow
@@ -156,19 +158,21 @@ Remember: Effective coordination is essential for successful task completion. Ta
             else:
                 prompt = self._BASE_PROMPT_TEMPLATE
         
-        # Initialize the ReactAgent parent class
+        # Initialize the BaseAgent parent class
         super().__init__(
+            name=supervisor_name,
             model=model,
             tools=tools,
             prompt=prompt,
-            state_schema=state_schema,
-            name=supervisor_name,
         )
         
         # Store supervisor-specific attributes
         self.agents = agents
         self.output_mode = output_mode
         self.supervisor_name = supervisor_name
+        self.state_schema = state_schema
+        self._workflow = None
+        self._app = None
     
     def build(self) -> StateGraph:
         """Build the supervisor workflow.
@@ -176,7 +180,9 @@ Remember: Effective coordination is essential for successful task completion. Ta
         Returns:
             The built StateGraph
         """
-        
+        if self._workflow is not None:
+            return self._workflow
+            
         self._workflow = create_supervisor(
             agents=self.agents,
             model=self.model,
@@ -188,3 +194,26 @@ Remember: Effective coordination is essential for successful task completion. Ta
         )
         
         return self._workflow
+        
+    def get_agent(self) -> StateGraph:
+        """Get the underlying supervisor workflow.
+        
+        Returns:
+            The StateGraph object
+        """
+        if self._workflow is None:
+            self._workflow = self.build()
+            
+        return self._workflow
+        
+    def compile(self) -> CompiledStateGraph: 
+        """Compile the supervisor workflow.
+        
+        Returns:
+            The compiled application
+        """
+        if self._workflow is None:
+            self.build()
+        
+        self._app = self._workflow.compile()
+        return self._app

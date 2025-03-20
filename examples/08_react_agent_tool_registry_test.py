@@ -130,11 +130,8 @@ react_agent = ReactAgent(
     ),
 )
 
-# 编译Agent
-agent = react_agent.compile()
-
 # 获取图对象
-graph = agent.get_graph()
+graph = react_agent.get_graph().get_graph()
 
 # 获取当前文件名（不含路径和扩展名）
 current_file = os.path.basename(__file__)
