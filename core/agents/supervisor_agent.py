@@ -12,6 +12,11 @@ from langgraph.prebuilt.chat_agent_executor import (
 from core.agents.supervisor import create_supervisor
 from core.agents.base.base_agent import BaseAgent
 from core.agents.react_agent import ReactAgent
+from core.agents.research_agent import ResearchAgent
+from core.agents.coder_agent import CoderAgent
+from core.agents.reporter_agent import ReporterAgent
+from core.agents.designer_agent import DesignerAgent
+from core.agents.data_analyst_agent import DataAnalystAgent
 from core.tools.todolist_tool import TodolistTool
 
 class SupervisorAgent(BaseAgent):
@@ -151,12 +156,20 @@ Remember: Effective coordination is essential for successful task completion. Ta
         elif enable_planning:
             tools = [self.todolist_tool]
         
-        # Use appropriate prompt template if no custom prompt is provided
+        # 方案一和方案二的实现
+        base_prompt = ""
+        if enable_planning:
+            base_prompt = self._PLANNING_PROMPT_TEMPLATE
+        else:
+            base_prompt = self._BASE_PROMPT_TEMPLATE
+            
         if prompt is None:
-            if enable_planning:
-                prompt = self._PLANNING_PROMPT_TEMPLATE
-            else:
-                prompt = self._BASE_PROMPT_TEMPLATE
+            # 方案二：根据传入的agents自动生成适配的提示词
+            agents_prompt = self._generate_agents_prompt(agents)
+            prompt = base_prompt + agents_prompt
+        else:
+            # 方案一：将自定义prompt追加到默认提示词后面
+            prompt = base_prompt + "\n\n" + prompt
         
         # Initialize the BaseAgent parent class
         super().__init__(
@@ -217,3 +230,56 @@ Remember: Effective coordination is essential for successful task completion. Ta
         
         self._app = self._workflow.compile()
         return self._app
+        
+    def _generate_agents_prompt(self, agents: List[ReactAgent]) -> str:
+        """Generate a prompt based on the types of agents provided.
+        
+        This method analyzes the agent types and generates appropriate descriptions
+        for each agent to be included in the supervisor prompt.
+        
+        Args:
+            agents: List of agents to generate descriptions for
+            
+        Returns:
+            A string containing descriptions of all agents
+        """
+        agent_descriptions = []
+        agent_descriptions.append("\n\n## Available Agents\n")
+        agent_descriptions.append("You have access to the following specialized agents:\n")
+        
+        for agent in agents:
+            if isinstance(agent, dict) and "name" in agent:
+                # Handle dict-like agents with name attribute
+                agent_name = agent["name"]
+            elif hasattr(agent, "name"):
+                # Handle object-like agents with name attribute
+                agent_name = agent.name
+            else:
+                # Skip agents without name
+                continue
+                
+            # Generate description based on agent type or name
+            if "research" in agent_name.lower() or isinstance(agent, ResearchAgent):
+                agent_descriptions.append(f"- **{agent_name}**: Specialized in gathering information and conducting research. Use for tasks requiring information retrieval, fact-checking, and synthesizing data from multiple sources.")
+            elif "coder" in agent_name.lower() or isinstance(agent, CoderAgent):
+                agent_descriptions.append(f"- **{agent_name}**: Specialized in writing, debugging, and optimizing code. Use for programming tasks, code generation, and technical problem-solving.")
+            elif "reporter" in agent_name.lower() or isinstance(agent, ReporterAgent):
+                agent_descriptions.append(f"- **{agent_name}**: Specialized in creating comprehensive reports and documentation. Use for summarizing information, creating structured documents, and presenting findings.")
+            elif "designer" in agent_name.lower() or isinstance(agent, DesignerAgent):
+                agent_descriptions.append(f"- **{agent_name}**: Specialized in UI/UX design and visual communication. Use for creating design mockups, improving user interfaces, and visual elements.")
+            elif "data" in agent_name.lower() and "analyst" in agent_name.lower() or isinstance(agent, DataAnalystAgent):
+                agent_descriptions.append(f"- **{agent_name}**: Specialized in data analysis and visualization. Use for analyzing datasets, creating visualizations, and extracting insights from data.")
+            elif "joke" in agent_name.lower():
+                agent_descriptions.append(f"- **{agent_name}**: Specialized in generating humor and entertainment content. Use for creating jokes, witty remarks, and light-hearted content.")
+            else:
+                # Generic description for unknown agent types
+                agent_descriptions.append(f"- **{agent_name}**: A specialized agent that can help with specific tasks.")
+        
+        agent_descriptions.append("\n## Agent Selection Guidelines\n")
+        agent_descriptions.append("When deciding which agent to use for a task:\n")
+        agent_descriptions.append("1. Consider the primary nature of the task (research, coding, reporting, design, data analysis, etc.)")
+        agent_descriptions.append("2. For complex tasks, break them down and assign different components to appropriate agents")
+        agent_descriptions.append("3. Ensure clear handoffs between agents when multiple agents are needed")
+        agent_descriptions.append("4. Synthesize outputs from multiple agents into a coherent response")
+        
+        return "\n".join(agent_descriptions)

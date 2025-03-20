@@ -113,24 +113,26 @@ Available tools:
             debug: Whether to enable debug mode.
             version: LangGraph version ("v1" or "v2").
         """
-        # Check if tavily_search is in tools, if not try to import and add it
-        from langchain_community.tools.tavily_search import TavilySearchResults
+        # Import tools registry to get search tools
+        from core.tools.registry import get_tools_by_category, ToolCategory
         
         # Initialize tools list if None
         if tools is None:
             tools = []
             
-        # Check if tavily_search is already in tools
-        has_tavily = any(tool.name == "tavily_search" for tool in tools if hasattr(tool, "name"))
-        
-        # Add tavily_search if not present
-        if not has_tavily:
-            try:
-                tavily_search = TavilySearchResults()
-                tools.append(tavily_search)
-            except Exception as e:
-                if debug:
-                    print(f"[{name}] Failed to initialize Tavily search tool: {str(e)}")
+        # Get all registered search tools from the registry
+        try:
+            search_tools = get_tools_by_category(ToolCategory.SEARCH)
+            
+            # Add search tools that aren't already in the tools list
+            for search_tool in search_tools:
+                if not any(tool.name == search_tool.name for tool in tools if hasattr(tool, "name")):
+                    tools.append(search_tool)
+                    if debug:
+                        print(f"[{name}] Added search tool: {search_tool.name}")
+        except Exception as e:
+            if debug:
+                print(f"[{name}] Failed to get search tools from registry: {str(e)}")
         
         # Format prompt template with tools information
         formatted_prompt = self._PROMPT_TEMPLATE
