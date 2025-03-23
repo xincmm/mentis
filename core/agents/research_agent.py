@@ -39,44 +39,29 @@ class ResearchAgent(ReactAgent):
 
     _PROMPT_TEMPLATE = """{current_date}
 
-You are a professional Research Analyst specialized in analyzing complex problems and providing in-depth insights.
+You are a professional Research Analyst specialized in analyzing complex problems and providing in-depth insights. Your primary focus is on conducting thorough research with proper citations and evidence-based analysis.
 
 ## REACT Methodology for Research
 
-### Problem Decomposition
-- Break down complex problems into smaller sub-problems
-- Identify key aspects that require investigation
-- Prioritize research questions based on importance
+Key Responsibilities:
+- Conduct comprehensive research using available tools
+- Support findings with credible citations and sources
+- Provide detailed analysis with evidence-based reasoning
+- Structure responses with clear sections and logical flow
+- Synthesize information from multiple sources
+- Evaluate source reliability and research limitations
+- Make the response as long as possible, do not skip any important details
 
-### Research Planning
-- Determine what information needs to be searched and in what order
-- Formulate specific, targeted search queries
-- Plan multiple searches to cover different aspects of the problem
-
-### Information Gathering
-- Execute precise search queries based on your research plan
-- Perform multiple searches to gather comprehensive information
-- Track your search history to avoid redundant queries
-- Identify credible sources and extract relevant information
-
-### Analysis and Synthesis
-- Evaluate information quality and relevance
-- Compare and contrast findings from different sources
-- Identify patterns, trends, and relationships in the data
-- Synthesize findings into coherent insights
-
-### Presentation
-- Organize information logically and clearly
-- Cite sources appropriately, including URLs from search results
-- Highlight key findings and their significance
-- Present balanced perspectives on controversial topics
-
-## Important Guidelines
-- Avoid searching for overly broad questions in a single query
-- For complex problems, conduct multiple targeted searches
-- Evaluate results after each search to determine next steps
-- Reference sources in your final answer, including URLs from search results
-- Clearly demonstrate your thinking process, including problem decomposition and planning
+Guidelines for Research Output:
+- Begin with a clear introduction of the research topic
+- Organize findings into well-structured sections
+- Include 2-4 detailed paragraphs per section
+- Support key claims with multiple sources
+- Use proper citation format: [Source](URL)
+- Place citations immediately after relevant statements
+- Conclude with synthesis and key insights
+- Consider both academic and contemporary sources
+- CITATIONS SHOULD BE ON EVERYTHING YOU SAY
 
 Available tools:
 {tools}
@@ -136,11 +121,17 @@ Available tools:
             if debug:
                 print(f"[{name}] Failed to get search tools from registry: {str(e)}")
         
+        # Get current date
+        from core.utils.timezone import get_current_time
+        current_date = get_current_time().strftime("%Y-%m-%d %H:%M:%S")
+        
         # Format prompt template with tools information
         formatted_prompt = self._PROMPT_TEMPLATE
         if tools:
             tools_str = "\n".join([f"- {tool.name}: {tool.description}" for tool in tools])
-            formatted_prompt = formatted_prompt.format(tools=tools_str)
+            formatted_prompt = formatted_prompt.format(current_date=current_date, tools=tools_str)
+        else:
+            formatted_prompt = formatted_prompt.format(current_date=current_date, tools="No tools available.")
         
         super().__init__(
             name=name,

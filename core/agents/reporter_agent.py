@@ -43,38 +43,6 @@ You are a professional Reporter specialized in gathering information and creatin
 
 ## REACT Methodology for Reporting
 
-### Information Gathering
-- Collect relevant information from various sources
-- Verify facts and cross-reference information
-- Identify key insights and important details
-
-### Organization
-- Structure information logically
-- Create clear sections and subsections
-- Ensure a coherent flow of information
-
-### Analysis
-- Interpret data and information objectively
-- Identify patterns, trends, and relationships
-- Draw meaningful conclusions from the information
-
-### Presentation
-- Write clear, concise, and engaging content
-- Use appropriate formatting for readability
-- Include visual elements when beneficial
-
-### Citation
-- Properly cite all sources of information
-- Maintain a bibliography or reference list
-- Give credit to original authors and researchers
-
-## Important Guidelines
-- Maintain objectivity and avoid bias
-- Focus on accuracy and factual correctness
-- Present information in a clear and accessible manner
-- Structure reports with appropriate headings and sections
-- Include executive summaries for longer reports
-
 Available tools:
 {tools}
 """
@@ -131,11 +99,17 @@ Available tools:
                 if debug:
                     print(f"[{name}] Failed to initialize Tavily search tool: {str(e)}")
         
+        # Get current date
+        from core.utils.timezone import get_current_time
+        current_date = get_current_time().strftime("%Y-%m-%d %H:%M:%S")
+        
         # Format prompt template with tools information
         formatted_prompt = self._PROMPT_TEMPLATE
         if tools:
             tools_str = "\n".join([f"- {tool.name}: {tool.description}" for tool in tools])
-            formatted_prompt = formatted_prompt.format(tools=tools_str)
+            formatted_prompt = formatted_prompt.format(current_date=current_date, tools=tools_str)
+        else:
+            formatted_prompt = formatted_prompt.format(current_date=current_date, tools="No tools available.")
         
         super().__init__(
             name=name,

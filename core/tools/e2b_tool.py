@@ -54,11 +54,13 @@ class E2BCodeInterpreterTool(BaseTool):
     
     name: str = "e2b_code_interpreter"
     description: str = (
-        "在安全的 Debian 基础沙箱环境中执行 Python 代码或 shell 命令，并返回结果。"
-        "适用于数据分析、可视化、复杂计算以及系统操作。"
-        "输入应为有效的 Python 代码字符串，或以 '!' 开头的 shell 命令。"
-        "常见 Python 库（如 numpy、pandas 和 matplotlib）已预装，若需其他库，可通过 pip 安装。"
-        "沙箱环境充分利用 Debian 系统的强大功能，支持广泛的操作。"
+        "Use this Python-only sandbox for calculations, data analysis, or visualizations"
+        "matplotlib, pandas, numpy, sympy, and yfinance are available"
+        "Remember to add the necessary imports for the libraries you use as they are not pre-imported"
+        "Include library installations (!pip install <library_name>) in the code where required"
+        "You can generate line based charts for data analysis"
+        "Use 'plt.show()' for plots, and mention generated URLs for outputs"
+        "Images are not allowed in the response!"
     )
     args_schema: type = E2BCodeInterpreterToolInput
     # 显式声明字段

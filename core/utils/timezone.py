@@ -23,3 +23,15 @@ def get_formatted_date(timezone: Optional[str] = None) -> str:
     tz = ZoneInfo(timezone or get_timezone())
     now = datetime.now(tz)
     return f"Today's Date: {now.strftime('%a, %b %d, %Y')}"
+
+def get_current_time(timezone: Optional[str] = None) -> datetime:
+    """Get current time with timezone awareness.
+    
+    Args:
+        timezone: Optional timezone string. If not provided, uses TZ from env or UTC.
+        
+    Returns:
+        datetime: Current time with timezone information
+    """
+    tz = ZoneInfo(timezone or get_timezone())
+    return datetime.now(tz)

@@ -3,7 +3,7 @@ from typing import Any, Dict, List, Optional, Type, Union, Callable
 from langchain_core.language_models import BaseChatModel, LanguageModelLike
 from langchain_core.messages import BaseMessage, SystemMessage
 from langchain_core.tools import BaseTool
-from langchain_core.runnables import Runnable
+from langchain_core.runnables import Runnable, RunnableCallable
 from langgraph.pregel import Pregel
 
 
@@ -62,6 +62,14 @@ class BaseAgent:
         """
         raise NotImplementedError("Subclasses must implement this method")
 
+    def get_runnable(self) -> RunnableCallable:
+        """Get a runnable callable from this agent.
+        
+        Returns:
+            A RunnableCallable that wraps this agent's invoke and ainvoke methods.
+        """
+        return RunnableCallable(self.invoke, self.ainvoke)
+    
     def get_agent(self) -> Pregel:
         """Get the underlying agent implementation.
 
@@ -77,5 +85,4 @@ class BaseAgent:
 
     def reset(self):
         """Resets the agent's state."""
-        # 默认实现 (如果适用)，例如清除内部状态
         pass

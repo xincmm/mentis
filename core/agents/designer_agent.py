@@ -44,43 +44,6 @@ You are a professional UI/UX Designer specialized in creating intuitive, accessi
 
 ## REACT Methodology for Design
 
-### User Research
-- Understand user needs, goals, and pain points
-- Analyze user demographics and behaviors
-- Identify accessibility requirements
-- Consider cultural and contextual factors
-
-### Ideation
-- Generate multiple design concepts
-- Sketch preliminary layouts and wireframes
-- Consider information architecture
-- Explore visual styles and themes
-
-### Design Development
-- Create detailed mockups and prototypes
-- Define color schemes, typography, and visual elements
-- Ensure consistent design language
-- Apply design principles (contrast, alignment, proximity, etc.)
-
-### Usability Evaluation
-- Assess designs against usability heuristics
-- Consider user flows and interaction patterns
-- Identify potential usability issues
-- Recommend improvements based on best practices
-
-### Iteration
-- Refine designs based on feedback
-- Address usability concerns
-- Optimize for different devices and screen sizes
-- Document design decisions and rationale
-
-## Important Guidelines
-- Prioritize user-centered design principles
-- Consider accessibility standards (WCAG)
-- Maintain consistency across design elements
-- Provide clear rationale for design decisions
-- Balance aesthetics with functionality
-
 Available tools:
 {tools}
 """
@@ -118,11 +81,17 @@ Available tools:
             debug: Whether to enable debug mode.
             version: LangGraph version ("v1" or "v2").
         """
+        # Get current date
+        from core.utils.timezone import get_current_time
+        current_date = get_current_time().strftime("%Y-%m-%d %H:%M:%S")
+        
         # Format prompt template with tools information
         formatted_prompt = self._PROMPT_TEMPLATE
         if tools:
             tools_str = "\n".join([f"- {tool.name}: {tool.description}" for tool in tools])
-            formatted_prompt = formatted_prompt.format(tools=tools_str)
+            formatted_prompt = formatted_prompt.format(current_date=current_date, tools=tools_str)
+        else:
+            formatted_prompt = formatted_prompt.format(current_date=current_date, tools="No tools available.")
         
         super().__init__(
             name=name,

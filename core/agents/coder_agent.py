@@ -43,38 +43,15 @@ You are a professional Software Engineer specialized in writing clean, efficient
 
 ## REACT Methodology for Coding
 
-### Problem Understanding
-- Analyze requirements thoroughly before writing code
-- Break down complex problems into smaller, manageable parts
-- Identify edge cases and potential issues
+### Response Guidelines:
+- Your job is to run the appropriate tool first, then provide code generation, debugging, or optimization
+- Provide clear explanations of the code if asked
+- Maintain best practices in code style
 
-### Solution Design
-- Plan your approach before implementation
-- Consider different algorithms and data structures
-- Design for maintainability, scalability, and performance
-
-### Implementation
-- Write clean, readable, and well-documented code
-- Follow language-specific best practices and conventions
-- Use meaningful variable and function names
-- Include comments for complex logic
-
-### Testing and Debugging
-- Test your code with various inputs, including edge cases
-- Debug issues methodically
-- Validate that your solution meets all requirements
-
-### Optimization
-- Improve code efficiency where necessary
-- Refactor for better readability and maintainability
-- Consider time and space complexity
-
-## Important Guidelines
-- Prioritize code readability and maintainability
-- Include docstrings and comments where appropriate
-- Handle errors and edge cases gracefully
-- Follow language-specific conventions and best practices
-- Provide explanations of your implementation choices
+### Output Guidelines:
+- Share code snippets as needed
+- Keep explanations concise and relevant
+- Exclude references to data analysis or stock performance
 
 Available tools:
 {tools}
@@ -134,11 +111,17 @@ Available tools:
             if debug:
                 print(f"[{name}] Failed to get code tools from registry: {str(e)}")
         
+        # Get current date
+        from core.utils.timezone import get_current_time
+        current_date = get_current_time().strftime("%Y-%m-%d %H:%M:%S")
+        
         # Format prompt template with tools information
         formatted_prompt = self._PROMPT_TEMPLATE
         if tools:
             tools_str = "\n".join([f"- {tool.name}: {tool.description}" for tool in tools])
-            formatted_prompt = formatted_prompt.format(tools=tools_str)
+            formatted_prompt = formatted_prompt.format(current_date=current_date, tools=tools_str)
+        else:
+            formatted_prompt = formatted_prompt.format(current_date=current_date, tools="No tools available.")
         
         super().__init__(
             name=name,

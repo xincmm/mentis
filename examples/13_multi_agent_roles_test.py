@@ -13,11 +13,33 @@ from langchain_community.tools import TavilySearchResults
 import os
 import logging
 import sys
+import io
+from contextlib import redirect_stdout, redirect_stderr
 
 load_dotenv()  # 自动加载 .env 文件
 
 # 1. 初始化大模型
 model = ChatOpenAI(model="gpt-4o-mini")
+
+# 设置日志捕获
+class LogCapture:
+    def __init__(self):
+        self.log_buffer = io.StringIO()
+        self.log_content = []
+    
+    def start_capture(self):
+        self.log_buffer = io.StringIO()
+        return self.log_buffer
+    
+    def stop_capture(self):
+        output = self.log_buffer.getvalue()
+        self.log_content.append(output)
+        return output
+    
+    def get_content(self):
+        return "\n".join(self.log_content)
+
+log_capture = LogCapture()
 
 ##############################################################################
 # Agent 2: Research Expert - 使用自定义的ResearchAgent
@@ -34,10 +56,13 @@ research_agent = ResearchAgent(
 ##############################################################################
 # Agent 3: Coder - 使用自定义的CoderAgent
 ##############################################################################
+from core.tools.e2b_tool import E2BCodeInterpreterTool
+e2b_tool = E2BCodeInterpreterTool()
 
 coder_agent = CoderAgent(
     name="coder_expert",
     model=model,
+    tools=[e2b_tool],
     max_iterations=5,
     cache_enabled=True,
     debug=True
@@ -102,9 +127,11 @@ app = supervisor.compile()
 current_file = os.path.basename(__file__)
 file_name_without_ext = os.path.splitext(current_file)[0]
 graph_dir = os.path.join(os.path.dirname(__file__), "graphs")
+logs_dir = os.path.join(os.path.dirname(__file__), "logs")
 
-# 确保 graphs 目录存在
+# 确保 graphs 和 logs 目录存在
 os.makedirs(graph_dir, exist_ok=True)
+os.makedirs(logs_dir, exist_ok=True)
 
 # 生成与文件名一致的图片名，并保存到 examples/graphs 目录
 image_data = app.get_graph().draw_mermaid_png()
@@ -116,54 +143,68 @@ with open(graph_path, "wb") as f:
 
 print(f"Image saved as {graph_path}")
 
+# 创建Markdown输出文件路径
+markdown_path = os.path.join(logs_dir, f"{file_name_without_ext}.md")
+
 ##############################################################################
 # 测试：复杂请求需要规划和多个步骤
 ##############################################################################
 
-# 配置日志记录
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler("agent_interactions.log"),
-        logging.StreamHandler(sys.stdout)
-    ]
-)
-
-# 设置langgraph的日志级别为INFO，以便捕获更多交互信息
-logging.getLogger('langgraph').setLevel(logging.INFO)
+def save_markdown_log():
+    """将执行结果保存为Markdown文件"""
+    with open(markdown_path, "w", encoding="utf-8") as f:
+        f.write(f"# 执行结果: {file_name_without_ext}\n\n")
+        f.write("## 图表\n\n")
+        f.write(f"![执行流程图]({os.path.relpath(graph_path, logs_dir)})\n\n")
+        f.write("## 执行日志\n\n")
+        f.write("```\n")
+        f.write(log_capture.get_content())
+        f.write("\n```\n")
+    print(f"执行日志已保存到 {markdown_path}")
 
 if __name__ == "__main__":
-    # 测试1：需要研究和编码的任务
-    result1 = app.invoke({
-        "messages": [
-            {
-                "role": "user",
-                "content": (
-                    "我需要一个简单的Python爬虫来获取最新的科技新闻，并将结果保存为CSV文件。"
-                    "请先研究一下如何实现，然后提供代码，最后生成一份报告总结这个解决方案。"
-                )
-            }
-        ]
-    })
-    
-    print("\n测试1结果:")
-    for m in result1["messages"]:
-        m.pretty_print()
-    
-    # 测试2：需要设计和数据分析的任务
-    result2 = app.invoke({
-        "messages": [
-            {
-                "role": "user",
-                "content": (
-                    "我有一个电商网站，需要重新设计产品页面，并分析现有的用户行为数据来优化转化率。"
-                    "请提供一个设计方案和数据分析建议。最后，讲个笑话来缓解一下压力。"
-                )
-            }
-        ]
-    })
-    
-    print("\n测试2结果:")
-    for m in result2["messages"]:
-        m.pretty_print()
+    try:
+        # 开始捕获输出
+        log_buffer = log_capture.start_capture()
+        
+        with redirect_stdout(log_buffer), redirect_stderr(log_buffer):
+            print(f"开始执行 {current_file} 测试...")
+            
+            # 测试1：需要研究和编码的任务
+            print("\n## 测试1：需要研究和编码的任务")
+            result1 = app.invoke({
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": (
+                            "我需要一个简单的Python爬虫来获取最新的科技新闻，并将结果保存为CSV文件。"
+                            "请先研究一下如何实现，然后提供代码，代码要进行完成的可用性测试，最后生成一份报告总结这个解决方案。"
+                        )
+                    }
+                ]
+            })
+            
+            print("\n测试1结果:")
+            for m in result1["messages"]:
+                m.pretty_print()
+            
+            # # 测试2：需要设计和数据分析的任务
+            # result2 = app.invoke({
+            #     "messages": [
+            #         {
+            #             "role": "user",
+            #             "content": (
+            #                 "我有一个电商网站，需要重新设计产品页面，并分析现有的用户行为数据来优化转化率。"
+            #                 "请提供一个设计方案和数据分析建议。最后，讲个笑话来缓解一下压力。"
+            #             )
+            #         }
+            #     ]
+            # })
+            
+            # print("\n测试2结果:")
+            # for m in result2["messages"]:
+            #     m.pretty_print()
+    finally:
+        # 停止捕获并保存结果
+        log_capture.stop_capture()
+        save_markdown_log()

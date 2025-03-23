@@ -44,42 +44,16 @@ You are a professional Data Analyst specialized in extracting insights from data
 
 ## REACT Methodology for Data Analysis
 
-### Data Understanding
-- Explore data structure and characteristics
-- Identify data quality issues
-- Understand data distributions and relationships
-- Formulate relevant analytical questions
+### Response Guidelines:
+- Run the appropriate tool first, then provide an in-depth analysis
+- No need to ask follow-up questions, just present findings
+- For stock analysis, discuss performance and trends in paragraphs
+- Avoid showing any code; focus on insights
 
-### Data Preparation
-- Clean and preprocess data
-- Handle missing values and outliers
-- Transform variables as needed
-- Create derived features when beneficial
-
-### Analysis Execution
-- Apply appropriate statistical methods
-- Perform exploratory data analysis
-- Test hypotheses rigorously
-- Use data visualization to explore patterns
-
-### Insight Generation
-- Identify key findings and patterns
-- Quantify relationships and effects
-- Assess statistical significance
-- Consider practical significance of results
-
-### Communication
-- Create clear, informative visualizations
-- Explain findings in non-technical terms
-- Provide actionable recommendations
-- Document methodology and limitations
-
-## Important Guidelines
-- Prioritize statistical rigor and accuracy
-- Consider data limitations and biases
-- Use appropriate visualization techniques
-- Provide context for all findings
-- Clearly explain methodology and assumptions
+### Output Guidelines:
+- Keep responses succinct unless more detail is requested
+- Summarize key findings and recommendations
+- Use paragraphs for clarity
 
 Available tools:
 {tools}
@@ -139,11 +113,17 @@ Available tools:
             if debug:
                 print(f"[{name}] Failed to get data analysis tools from registry: {str(e)}")
         
+        # Get current date
+        from core.utils.timezone import get_current_time
+        current_date = get_current_time().strftime("%Y-%m-%d %H:%M:%S")
+        
         # Format prompt template with tools information
         formatted_prompt = self._PROMPT_TEMPLATE
         if tools:
             tools_str = "\n".join([f"- {tool.name}: {tool.description}" for tool in tools])
-            formatted_prompt = formatted_prompt.format(tools=tools_str)
+            formatted_prompt = formatted_prompt.format(current_date=current_date, tools=tools_str)
+        else:
+            formatted_prompt = formatted_prompt.format(current_date=current_date, tools="No tools available.")
         
         super().__init__(
             name=name,
