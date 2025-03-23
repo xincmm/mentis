@@ -37,7 +37,9 @@ class ReporterAgent(ReactAgent):
     - Store report sections in structured format for better organization
     """
 
-    _PROMPT_TEMPLATE = """You are a professional Reporter specialized in gathering information and creating comprehensive, well-structured reports.
+    _PROMPT_TEMPLATE = """{current_date}
+
+You are a professional Reporter specialized in gathering information and creating comprehensive, well-structured reports.
 
 ## REACT Methodology for Reporting
 

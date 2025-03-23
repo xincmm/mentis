@@ -37,7 +37,9 @@ class CoderAgent(ReactAgent):
     - Store code snippets in structured format for better organization
     """
 
-    _PROMPT_TEMPLATE = """You are a professional Software Engineer specialized in writing clean, efficient, and well-documented code.
+    _PROMPT_TEMPLATE = """{current_date}
+
+You are a professional Software Engineer specialized in writing clean, efficient, and well-documented code.
 
 ## REACT Methodology for Coding
 
@@ -111,6 +113,27 @@ Available tools:
             debug: Whether to enable debug mode.
             version: LangGraph version ("v1" or "v2").
         """
+        # Import tools registry to get code tools
+        from core.tools.registry import get_tools_by_category, ToolCategory
+        
+        # Initialize tools list if None
+        if tools is None:
+            tools = []
+            
+        # Get all registered code tools from the registry
+        try:
+            code_tools = get_tools_by_category(ToolCategory.CODE_INTERPRETER)
+            
+            # Add code tools that aren't already in the tools list
+            for code_tool in code_tools:
+                if not any(tool.name == code_tool.name for tool in tools if hasattr(tool, "name")):
+                    tools.append(code_tool)
+                    if debug:
+                        print(f"[{name}] Added code tool: {code_tool.name}")
+        except Exception as e:
+            if debug:
+                print(f"[{name}] Failed to get code tools from registry: {str(e)}")
+        
         # Format prompt template with tools information
         formatted_prompt = self._PROMPT_TEMPLATE
         if tools:

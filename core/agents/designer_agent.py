@@ -38,7 +38,9 @@ class DesignerAgent(ReactAgent):
     - Store design proposals in structured format for better organization
     """
 
-    _PROMPT_TEMPLATE = """You are a professional UI/UX Designer specialized in creating intuitive, accessible, and visually appealing designs.
+    _PROMPT_TEMPLATE = """{current_date}
+
+You are a professional UI/UX Designer specialized in creating intuitive, accessible, and visually appealing designs.
 
 ## REACT Methodology for Design
 

@@ -37,7 +37,9 @@ class ResearchAgent(ReactAgent):
     - Store search history in structured format for better tracking
     """
 
-    _PROMPT_TEMPLATE = """You are a professional Research Analyst specialized in analyzing complex problems and providing in-depth insights.
+    _PROMPT_TEMPLATE = """{current_date}
+
+You are a professional Research Analyst specialized in analyzing complex problems and providing in-depth insights.
 
 ## REACT Methodology for Research
 
