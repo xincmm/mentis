@@ -12,10 +12,10 @@ from langgraph.prebuilt.chat_agent_executor import (
     StateSchemaType,
     StructuredResponseSchema,
 )
-from langgraph.pregel import Pregel
+from core.agents.base.base_agent import BaseAgent
 
 
-class ReactAgent(Pregel):
+class ReactAgent(BaseAgent):
     """ReAct Agent class for reasoning and acting with tools.
     
     This class provides a high-level interface for creating a ReAct agent workflow
@@ -68,19 +68,19 @@ class ReactAgent(Pregel):
         self.debug = debug
         self.version = version
         self.name = name
-        self._app = None
+        self._agent = None
     
-    def build(self) -> CompiledGraph:
+    def compile(self) -> CompiledGraph:
         """Build the ReAct agent workflow.
         
         Returns:
             The built CompiledGraph
         """
         # 如果_app已经存在，直接返回，避免重复构建
-        if self._app is not None:
-            return self._app
+        if self._agent is not None:
+            return self._agent
             
-        self._app = create_react_agent(
+        self._agent = create_react_agent(
             model=self.model,
             tools=self.tools,
             prompt=self.prompt,
@@ -96,70 +96,7 @@ class ReactAgent(Pregel):
             name=self.name,
         )
         
-        return self._app
-    
-    def compile(
-        self,
-        checkpointer: Optional[Checkpointer] = None,
-        *,
-        store: Optional[BaseStore] = None,
-        interrupt_before: Optional[Union[Literal["All"], list[str]]] = None,
-        interrupt_after: Optional[Union[Literal["All"], list[str]]] = None,
-        debug: bool = False,
-        name: Optional[str] = None,
-    ):
-        """Compile the ReAct agent workflow.
-        
-        Args:
-            checkpointer: Optional checkpointer for persisting state.
-                If provided, this Checkpointer serves as a fully versioned "short-term memory" for the graph,
-                allowing it to be paused, resumed, and replayed from any point.
-                If None, it may inherit the parent graph's checkpointer when used as a subgraph.
-                If False, it will not use or inherit any checkpointer.
-            store: Optional store for persisting state.
-            interrupt_before: An optional list of node names to interrupt before.
-            interrupt_after: An optional list of node names to interrupt after.
-            debug: A flag indicating whether to enable debug mode.
-            name: Optional name for the compiled graph.
-            
-        Returns:
-            The compiled application
-        """
-        # 如果_app已经存在，直接返回，避免重复编译
-        if self._app is None:
-            self.build()
-            
-        return self._app
-    
-    def invoke(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        """Invoke the ReAct agent with the given state.
-        
-        Args:
-            state: Current state of the conversation
-            
-        Returns:
-            Updated state after agent processing
-        """
-        # 确保应用已编译
-        if self._app is None:
-            self.compile()
-        
-        return self._app.invoke(state)
-    
-    async def ainvoke(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        """Asynchronously invoke the ReAct agent with the given state.
-        
-        Args:
-            state: Current state of the conversation
-            
-        Returns:
-            Updated state after agent processing
-        """
-        # 确保应用已编译
-        if self._app is None:
-            self.compile()
-        
-        return await self._app.ainvoke(state)
+        return self._agent
     
     def stream(self, state: Dict[str, Any], **kwargs) -> Any:
         """Stream the ReAct agent execution with the given state.
@@ -175,31 +112,7 @@ class ReactAgent(Pregel):
             Iterator over intermediate states
         """
         # 确保应用已编译
-        if self._app is None:
+        if self._agent is None:
             self.compile()
         
-        return self._app.stream(state, **kwargs)
-    
-    def get_graph(self) -> CompiledGraph:
-        """Get the underlying graph of the ReAct agent.
-        
-        Returns:
-            The CompiledGraph object
-        """
-        if self._app is None:
-            self.build()
-        
-        return self._app
-    
-    def reset(self):
-        """Reset the agent's state.
-        
-        This method resets the agent's state by clearing the checkpointer's checkpoint.
-        It allows the agent to be reused for new conversations.
-        """
-        # 重置checkpointer状态
-        if self.checkpointer:
-            self.checkpointer.checkpoint = None
-            
-        # 重置_app，以便下次使用时重新构建
-        self._app = None
+        return self._agent.stream(state, **kwargs)

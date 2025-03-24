@@ -24,41 +24,6 @@ def print_separator(title):
     print("=" * 80)
 
 ##############################################################################
-# 创建一个记录Agent思考过程的函数
-##############################################################################
-
-def log_agent_actions(state: Dict[str, Any]) -> None:
-    """记录Agent的思考过程和行动"""
-    print("\n" + "-" * 50)
-    print("当前状态:")
-    
-    # 打印最新消息
-    if state.get("messages") and len(state["messages"]) > 0:
-        latest_message = state["messages"][-1]
-        
-        if isinstance(latest_message, AIMessage):
-            print(f"\nAI思考过程:")
-            print(latest_message.content)
-            
-            # 如果有工具调用，打印工具调用信息
-            if latest_message.tool_calls:
-                print(f"\n工具调用:")
-                for tool_call in latest_message.tool_calls:
-                    print(f"- 工具: {tool_call['name']}")
-                    print(f"- 参数: {tool_call['args']}")
-        
-        elif isinstance(latest_message, ToolMessage):
-            print(f"\n工具返回结果:")
-            print(f"- 工具: {latest_message.name}")
-            # 只打印结果的前200个字符，避免输出过长
-            content = latest_message.content
-            if len(content) > 500:
-                content = content[:500] + "... (更多内容省略)"
-            print(f"- 结果: {content}")
-    
-    print("-" * 50)
-
-##############################################################################
 # 检查E2B代码解释器工具是否已注册
 ##############################################################################
 
@@ -115,8 +80,6 @@ react_agent = ReactAgent(
         "你是一位专业的数据分析师和编程助手，擅长使用Python进行数据分析和可视化。\n"
         "你有多个强大的代码执行工具可以使用：\n"
         "- e2b_code_interpreter: 用于执行Python代码，支持数据分析和可视化\n"
-        "- exec_python: 用于执行Python代码\n"
-        "- exec_javascript: 用于执行JavaScript代码\n\n"
         "当面对编程和数据分析问题时，请遵循以下方法论：\n"
         "1. 分析问题：理解用户的需求和问题本质\n"
         "2. 制定计划：确定解决方案和需要使用的工具\n"
@@ -135,26 +98,26 @@ react_agent = ReactAgent(
 # 编译Agent
 agent = react_agent.compile()
 
-# 获取图对象
-graph = agent.get_graph()
+# # 获取图对象
+# graph = agent.get_graph()
 
-# 获取当前文件名（不含路径和扩展名）
-current_file = os.path.basename(__file__)
-file_name_without_ext = os.path.splitext(current_file)[0]
-graph_dir = os.path.join(os.path.dirname(__file__), "graphs")
+# # 获取当前文件名（不含路径和扩展名）
+# current_file = os.path.basename(__file__)
+# file_name_without_ext = os.path.splitext(current_file)[0]
+# graph_dir = os.path.join(os.path.dirname(__file__), "graphs")
 
-# 确保 graphs 目录存在
-os.makedirs(graph_dir, exist_ok=True)
+# # 确保 graphs 目录存在
+# os.makedirs(graph_dir, exist_ok=True)
 
-# 生成与文件名一致的图片名，并保存到 examples/graphs 目录
-image_data = graph.draw_mermaid_png()
-graph_path = os.path.join(graph_dir, f"{file_name_without_ext}.png")
+# # 生成与文件名一致的图片名，并保存到 examples/graphs 目录
+# image_data = graph.draw_mermaid_png()
+# graph_path = os.path.join(graph_dir, f"{file_name_without_ext}.png")
 
-# 保存图片（如果已存在则覆盖）
-with open(graph_path, "wb") as f:
-    f.write(image_data)
+# # 保存图片（如果已存在则覆盖）
+# with open(graph_path, "wb") as f:
+#     f.write(image_data)
 
-print(f"工作流图已保存为 {graph_path}")
+# print(f"工作流图已保存为 {graph_path}")
 
 ##############################################################################
 # 测试：使用E2B代码解释器执行简单的数据分析任务
@@ -170,38 +133,7 @@ if __name__ == "__main__":
             HumanMessage(content="使用Python生成一个简单的正弦波图形，如果有找不到的模块，需要自动安装")
         ]
     }
-    
-    # 使用stream方法逐步获取中间状态
-    final_state = None
-    for partial_state in react_agent.stream(inputs, stream_mode="values"):
-        # 保存最终状态
-        final_state = partial_state
-        
-        # 获取消息列表
-        messages = partial_state.get("messages", [])
-        if not messages:
-            continue
-            
-        # 获取最新消息
-        latest_message = messages[-1]
-        
-        # 使用log_agent_actions函数记录状态
-        log_agent_actions({"messages": [latest_message]})
-    
-    # 打印最终回答
-    print_separator("最终回答")
-    if final_state and final_state.get("messages"):
-        for message in final_state["messages"]:
-            if isinstance(message, AIMessage) and not message.tool_calls:
-                print(message.content)
-                
-                # 将结果保存到文件
-                output_dir = os.path.join(os.path.dirname(__file__), "output")
-                os.makedirs(output_dir, exist_ok=True)
-                output_file = os.path.join(output_dir, "e2b_code_interpreter_result.md")
-                
-                with open(output_file, "w", encoding="utf-8") as f:
-                    f.write("# E2B代码解释器测试结果\n\n")
-                    f.write(message.content)
-                
-                print(f"\n结果已保存到: {output_file}")
+    result = agent.invoke(inputs)
+
+    for m in result["messages"]:
+        m.pretty_print()

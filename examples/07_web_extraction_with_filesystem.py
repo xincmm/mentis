@@ -7,14 +7,12 @@ from typing import Dict, Any, List
 
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
-from langchain_community.tools import JinaSearch
 from langchain_community.agent_toolkits import FileManagementToolkit
 from langgraph.prebuilt import create_react_agent
 from langgraph.checkpoint.memory import MemorySaver
 from dotenv import load_dotenv
-
+from langchain_community.tools import TavilySearchResults
 from core.agents.supervisor_agent import SupervisorAgent
-from core.tools.firecrawl_tool import FireCrawlTool
 
 load_dotenv()  # 自动加载 .env 文件
 
@@ -65,19 +63,17 @@ def log_agent_actions(state: Dict[str, Any]) -> None:
     print("=" * 50)
 
 ##############################################################################
-# 创建Web提取工具 - FireCrawl用于网站结构，Jina用于内容提取
+# 创建Web提取工具
 ##############################################################################
+# 创建Tavily搜索工具
 
-# 创建FireCrawl工具 - 用于网站结构分析
-firecrawl_tool = FireCrawlTool(
-    mode="crawl",  # 使用爬取模式
-    params={
-        "max_pages": 5,  # 限制爬取页面数量，减少为5页
-    }
+tavily_search = TavilySearchResults(
+    max_results=3,
+    include_answer=True,
+    include_raw_content=False,
+    include_images=False,
+    search_depth="advanced"
 )
-
-# 创建Jina Reader工具 - 用于内容提取
-jina_reader_tool = JinaSearch()
 
 ##############################################################################
 # 创建文件系统工具 - 用于保存提取的内容
@@ -102,33 +98,17 @@ filesystem_tools = filesystem_toolkit.get_tools()
 
 research_agent = create_react_agent(
     model=model,
-    tools=[firecrawl_tool, jina_reader_tool],
+    tools=[tavily_search],
     name="research_agent",
     # 提示词强调分解问题、多步思考和综合信息
     prompt=(
-        "你是一位专业的网页内容分析专家，擅长提取和分析网站结构与内容。\n"
-        "你有两个强大的工具:\n"
-        "1. 'firecrawl_tool': 用于爬取网站结构和下级页面\n"
-        "2. 'jina_reader_tool': 用于从特定URL提取结构化内容，获取干净可读的内容\n\n"
-        "当面对网站分析任务时，请遵循以下方法论:\n"
-        "1. 分析任务: 明确需要从网站获取什么信息\n"
-        "2. 网站结构分析: 使用firecrawl_tool爬取网站结构，了解可用页面\n"
-        "3. 内容提取: 根据网站结构，使用jina_reader_tool从关键页面提取内容\n"
-        "4. 信息整合: 将提取的内容整合成有条理的分析结果\n\n"
-        "重要提示:\n"
-        "- 先使用firecrawl_tool了解网站结构，再使用jina_reader_tool提取具体内容\n"
-        "- 对于大型网站，先分析网站结构，再有针对性地选择重要页面进行内容提取\n"
-        "- 每次工具使用后评估结果，决定下一步行动\n"
-        "- 在最终回答中提供结构化的分析，包括网站组织方式和关键内容摘要\n"
-        "- 清晰地展示你的思考过程，包括为什么选择特定页面进行分析\n\n"
-        "上下文管理指南:\n"
-        "- 避免一次性发起过多并行工具调用，这可能导致上下文长度超出限制\n"
-        "- 对于多页面网站，采用分批处理策略：先获取结构，然后每次只处理1-3个页面\n"
-        "- 处理大型内容时，提取关键信息并进行摘要，减少传递的token数量\n"
-        "- 如果发现上下文即将超出限制，主动进行内容整理和压缩\n"
-        "- 对于需要处理的大量页面，创建处理计划并逐步执行，而不是一次性处理所有页面\n"
+        "You are a world-class researcher. You have access to the 'tavily_search_results_json' tool "
+        "which can search the web for real-time information. "
+        "When asked a question, use this tool to find accurate and up-to-date information. "
+        "Summarize the search results in a clear and concise manner. "
+        "Always cite your sources by including the URLs from the search results."
     ),
-    debug=True)
+    debug=False)
 
 ##############################################################################
 # 创建FileSystem Agent - 用于保存提取的内容
@@ -162,7 +142,8 @@ filesystem_agent = create_react_agent(
 ##############################################################################
 # 创建Supervisor Agent - 协调Research Agent和FileSystem Agent
 ##############################################################################
-
+# 创建内存存储器用于保存对话状态
+memory_saver = MemorySaver()
 supervisor = SupervisorAgent(
     agents=[research_agent, filesystem_agent],
     model=model,
@@ -189,31 +170,31 @@ supervisor = SupervisorAgent(
         "- 对于需要保存的大型内容，考虑将其分割成多个小文件，而不是一个大文件\n"
         "- 在处理多页面内容时，可以采用先保存再处理的策略，减轻上下文负担\n"
     ),
+    checkpointer=memory_saver
 )
 
-# 创建内存存储器用于保存对话状态
-memory_saver = MemorySaver()
+
 
 # 编译得到一个可调用的"App"，添加checkpointer实现记忆功能
-app = supervisor.compile(checkpointer=memory_saver)
+app = supervisor.compile()
 
-# 获取当前文件名（不含路径和扩展名）
-current_file = os.path.basename(__file__)
-file_name_without_ext = os.path.splitext(current_file)[0]
-graph_dir = os.path.join(os.path.dirname(__file__), "graphs")
+# # 获取当前文件名（不含路径和扩展名）
+# current_file = os.path.basename(__file__)
+# file_name_without_ext = os.path.splitext(current_file)[0]
+# graph_dir = os.path.join(os.path.dirname(__file__), "graphs")
 
-# 确保 graphs 目录存在
-os.makedirs(graph_dir, exist_ok=True)
+# # 确保 graphs 目录存在
+# os.makedirs(graph_dir, exist_ok=True)
 
-# 生成与文件名一致的图片名，并保存到 examples/graphs 目录
-image_data = app.get_graph().draw_mermaid_png()
-graph_path = os.path.join(graph_dir, f"{file_name_without_ext}.png")
+# # 生成与文件名一致的图片名，并保存到 examples/graphs 目录
+# image_data = app.get_graph().draw_mermaid_png()
+# graph_path = os.path.join(graph_dir, f"{file_name_without_ext}.png")
 
-# 保存图片（如果已存在则覆盖）
-with open(graph_path, "wb") as f:
-    f.write(image_data)
+# # 保存图片（如果已存在则覆盖）
+# with open(graph_path, "wb") as f:
+#     f.write(image_data)
 
-print(f"图表已保存为 {graph_path}")
+# print(f"图表已保存为 {graph_path}")
 
 ##############################################################################
 # 主函数 - 处理用户输入
@@ -238,35 +219,15 @@ async def main():
             print("\n感谢使用，再见！")
             break
         
-        # 检查是否包含批量处理指令
-        batch_size = 3  # 默认批处理大小
-        if "批处理大小" in user_input and "设置为" in user_input:
-            try:
-                # 尝试从用户输入中提取批处理大小
-                size_text = user_input.split("设置为")[1].strip().split()[0]
-                new_batch_size = int(size_text)
-                if 1 <= new_batch_size <= 5:  # 限制合理范围
-                    batch_size = new_batch_size
-                    print(f"\n批处理大小已设置为: {batch_size}")
-                else:
-                    print("\n批处理大小必须在1-5之间，已使用默认值3")
-            except:
-                print("\n无法解析批处理大小，已使用默认值3")
-        
-        # 准备初始状态 - 只包含当前用户消息，添加批处理大小信息
-        enhanced_input = user_input
-        if not any(keyword in user_input.lower() for keyword in ["批处理", "batch", "分批"]):
-            enhanced_input = f"{user_input} (请使用批处理策略，每批最多处理{batch_size}个页面，避免上下文溢出)"
-        
+        # 准备初始状态 - 只包含当前用户消息
         initial_state = {
-            "messages": [HumanMessage(content=enhanced_input)]
+            "messages": [HumanMessage(content=user_input)]
         }
         
         try:
             print("\n=== 🔍 开始研究 ===\n")
             
             # 使用stream方法逐步获取中间状态，传入config以使用相同的thread_id
-            final_state = None
             for partial_state in app.stream(initial_state, config, stream_mode="values"):
                 # 保存最终状态
                 final_state = partial_state
@@ -281,15 +242,6 @@ async def main():
                 
                 # 使用log_agent_actions函数记录状态
                 log_agent_actions({"messages": [latest_message]})
-            
-            # 打印最终回答
-            print("\n最终回答:")
-            if final_state and final_state.get("messages"):
-                for message in final_state["messages"]:
-                    if isinstance(message, AIMessage) and not message.tool_calls:
-                        print("\n" + "=" * 80)
-                        print(message.content)
-                        print("=" * 80 + "\n")
         
         except Exception as e:
             print(f"\n处理查询时出错: {e}")

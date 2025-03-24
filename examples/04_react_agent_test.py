@@ -6,44 +6,10 @@ from langchain_community.tools import TavilySearchResults
 from typing import Dict, Any
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from dotenv import load_dotenv
+from core.utils.agent_utils import log_agent_actions, save_agent_graph
 load_dotenv()  # 自动加载 .env 文件
 # 初始化大模型
 model = ChatOpenAI(model="gpt-4o-mini")
-
-##############################################################################
-# 创建一个记录Agent思考过程的函数
-##############################################################################
-
-def log_agent_actions(state: Dict[str, Any]) -> None:
-    """记录Agent的思考过程和行动"""
-    print("\n" + "=" * 50)
-    print("当前状态:")
-    
-    # 打印最新消息
-    if state.get("messages") and len(state["messages"]) > 0:
-        latest_message = state["messages"][-1]
-        
-        if isinstance(latest_message, AIMessage):
-            print(f"\nAI思考过程:")
-            print(latest_message.content)
-            
-            # 如果有工具调用，打印工具调用信息
-            if latest_message.tool_calls:
-                print(f"\n工具调用:")
-                for tool_call in latest_message.tool_calls:
-                    print(f"- 工具: {tool_call['name']}")
-                    print(f"- 参数: {tool_call['args']}")
-        
-        elif isinstance(latest_message, ToolMessage):
-            print(f"\n工具返回结果:")
-            print(f"- 工具: {latest_message.name}")
-            # 只打印结果的前200个字符，避免输出过长
-            content = latest_message.content
-            if len(content) > 200:
-                content = content[:200] + "... (更多内容省略)"
-            print(f"- 结果: {content}")
-    
-    print("=" * 50)
 
 ##############################################################################
 # 创建Tavily搜索工具 - 配置为深度搜索模式
@@ -84,26 +50,8 @@ react_agent = create_react_agent(
     ),
 )
 
-# 获取图对象
-graph = react_agent.get_graph()
-
-# 获取当前文件名（不含路径和扩展名）
-current_file = os.path.basename(__file__)
-file_name_without_ext = os.path.splitext(current_file)[0]
-graph_dir = os.path.join(os.path.dirname(__file__), "graphs")
-
-# 确保 graphs 目录存在
-os.makedirs(graph_dir, exist_ok=True)
-
-# 生成与文件名一致的图片名，并保存到 examples/graphs 目录
-image_data = react_agent.get_graph().draw_mermaid_png()
-graph_path = os.path.join(graph_dir, f"{file_name_without_ext}.png")
-
-# 保存图片（如果已存在则覆盖）
-with open(graph_path, "wb") as f:
-    f.write(image_data)
-
-print(f"Image saved as {graph_path}")
+# 保存Agent图表
+# save_agent_graph(react_agent)
 
 ##############################################################################
 # 测试：查询"特斯拉2025年的发展预期"

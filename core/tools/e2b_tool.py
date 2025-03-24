@@ -185,3 +185,68 @@ class E2BCodeInterpreterTool(BaseTool):
             raw_output=output,
             tool_call_id=tool_call_id,
         )
+
+    def run_ai_code(self, code: str):
+        """
+        直接在沙箱中执行AI生成的代码
+        
+        Args:
+            code (str): 要执行的代码字符串
+            
+        Returns:
+            dict: 包含执行结果的字典
+        """
+        if not self._is_available:
+            return {
+                "success": False,
+                "error": {
+                    "name": "SandboxUnavailable",
+                    "value": f"E2B沙箱不可用: {self._init_error}",
+                    "traceback": ""
+                }
+            }
+        
+        try:
+            # 执行代码
+            execution = self.sandbox.run_code(code)
+            
+            result = {
+                "success": True,
+                "stdout": execution.stdout if hasattr(execution, "stdout") else "",
+                "results": []
+            }
+            
+            # 检查错误
+            if hasattr(execution, "error") and execution.error:
+                result["success"] = False
+                result["error"] = {
+                    "name": execution.error.name,
+                    "value": execution.error.value,
+                    "traceback": execution.error.traceback
+                }
+                return result
+            
+            # 处理结果
+            if hasattr(execution, "results") and execution.results:
+                for res in execution.results:
+                    result_data = {"type": "text", "value": str(res)}
+                    
+                    # 处理PNG图像
+                    if hasattr(res, "png") and res.png:
+                        result_data["type"] = "png"
+                        result_data["value"] = res.png  # base64编码的字符串
+                    
+                    result["results"].append(result_data)
+            
+            return result
+            
+        except Exception as e:
+            import traceback
+            return {
+                "success": False,
+                "error": {
+                    "name": type(e).__name__,
+                    "value": str(e),
+                    "traceback": traceback.format_exc()
+                }
+            }

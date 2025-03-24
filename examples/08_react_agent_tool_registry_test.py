@@ -130,26 +130,27 @@ react_agent = ReactAgent(
     ),
 )
 
+agent = react_agent.compile()
 # 获取图对象
-graph = react_agent.get_graph().get_graph()
+graph = agent.get_graph()
 
-# 获取当前文件名（不含路径和扩展名）
-current_file = os.path.basename(__file__)
-file_name_without_ext = os.path.splitext(current_file)[0]
-graph_dir = os.path.join(os.path.dirname(__file__), "graphs")
+# # 获取当前文件名（不含路径和扩展名）
+# current_file = os.path.basename(__file__)
+# file_name_without_ext = os.path.splitext(current_file)[0]
+# graph_dir = os.path.join(os.path.dirname(__file__), "graphs")
 
-# 确保 graphs 目录存在
-os.makedirs(graph_dir, exist_ok=True)
+# # 确保 graphs 目录存在
+# os.makedirs(graph_dir, exist_ok=True)
 
-# 生成与文件名一致的图片名，并保存到 examples/graphs 目录
-image_data = graph.draw_mermaid_png()
-graph_path = os.path.join(graph_dir, f"{file_name_without_ext}.png")
+# # 生成与文件名一致的图片名，并保存到 examples/graphs 目录
+# image_data = graph.draw_mermaid_png()
+# graph_path = os.path.join(graph_dir, f"{file_name_without_ext}.png")
 
-# 保存图片（如果已存在则覆盖）
-with open(graph_path, "wb") as f:
-    f.write(image_data)
+# # 保存图片（如果已存在则覆盖）
+# with open(graph_path, "wb") as f:
+#     f.write(image_data)
 
-print(f"工作流图已保存为 {graph_path}")
+# print(f"工作流图已保存为 {graph_path}")
 
 ##############################################################################
 # 测试：查询"美联储的详细介绍和它如何影响全球经济"
@@ -165,38 +166,9 @@ if __name__ == "__main__":
             HumanMessage(content="请提供美联储(Federal Reserve)的详细介绍，包括其历史、结构、职能，以及它如何通过货币政策影响全球经济。")
         ]
     }
-    
-    # 使用stream方法逐步获取中间状态
-    final_state = None
-    for partial_state in react_agent.stream(inputs, stream_mode="values"):
-        # 保存最终状态
-        final_state = partial_state
-        
-        # 获取消息列表
-        messages = partial_state.get("messages", [])
-        if not messages:
-            continue
-            
-        # 获取最新消息
-        latest_message = messages[-1]
-        
-        # 使用log_agent_actions函数记录状态
-        log_agent_actions({"messages": [latest_message]})
-    
-    # 打印最终回答
-    print_separator("最终研究报告")
-    if final_state and final_state.get("messages"):
-        for message in final_state["messages"]:
-            if isinstance(message, AIMessage) and not message.tool_calls:
-                print(message.content)
-                
-                # 将结果保存到文件
-                output_dir = os.path.join(os.path.dirname(__file__), "output")
-                os.makedirs(output_dir, exist_ok=True)
-                output_file = os.path.join(output_dir, "fed_research_report.md")
-                
-                with open(output_file, "w", encoding="utf-8") as f:
-                    f.write("# 美联储研究报告\n\n")
-                    f.write(message.content)
-                
-                print(f"\n研究报告已保存到: {output_file}")
+    result = agent.invoke(inputs)
+##############################################################################
+# 打印最终对话消息
+##############################################################################
+    for m in result["messages"]:
+        m.pretty_print()

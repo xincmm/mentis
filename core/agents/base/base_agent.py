@@ -3,6 +3,9 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.language_models import LanguageModelLike
 from langchain_core.messages import SystemMessage, BaseMessage
 from langchain_core.tools import BaseTool
+from langgraph.graph import StateGraph
+from langgraph.types import Checkpointer
+from langgraph.graph.state import CompiledStateGraph
 from langgraph.utils.runnable import RunnableCallable
 import logging
 
@@ -16,9 +19,10 @@ class BaseAgent:
         model: Union[BaseChatModel, LanguageModelLike],
         tools: Optional[List[BaseTool]] = None,
         prompt: Optional[Union[str, SystemMessage, Callable]] = None,
+        checkpointer: Optional[Checkpointer] = None,
         max_context_messages: Optional[int] = None,  # Limit number of recent messages
         max_context_tokens: Optional[int] = None,    # Limit total estimated tokens
-        model_name: Optional[str] = "gpt-3.5-turbo", # Optional, used for future token estimation improvements
+        model_name: Optional[str] = "gpt-4o-mini", # Optional, used for future token estimation improvements
     ):
         if max_context_messages and max_context_tokens:
             raise ValueError("Only one of max_context_messages or max_context_tokens should be set.")
@@ -27,9 +31,11 @@ class BaseAgent:
         self.model = model
         self.tools = tools or []
         self.prompt = prompt
+        self.checkpointer: Checkpointer = checkpointer
         self.max_context_messages = max_context_messages
         self.max_context_tokens = max_context_tokens
         self.model_name = model_name
+        self._workflow = None
         self._agent = None
 
     def _estimate_tokens(self, message: BaseMessage) -> int:
@@ -74,40 +80,78 @@ class BaseAgent:
         memory_messages = [SystemMessage(content=chunk) for chunk in memory]
         state["messages"] = memory_messages + messages
         return state
+    
+    def build(self) -> StateGraph:
+        """Build the supervisor workflow.
+        
+        Returns:
+            The built StateGraph
+        """
+        if self._workflow is not None:
+            return self._workflow
 
+        # Build the workflow using LangGraph
+        self._workflow = StateGraph()
+        return self._workflow  # Return the workflow, not 'self
+        
+    def compile(self) -> CompiledStateGraph: 
+        """Compile the supervisor workflow.
+        
+        Returns:
+            The compiled application
+        """
+        if self._workflow is None:
+            self.build()
+        
+        self._agent = self._workflow.compile(checkpointer=self.checkpointer)
+        return self._agent
+        
     def invoke(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Synchronous fallback implementation for BaseAgent.
-        Meant to be overridden in subclasses. Use this only for testing.
-        """
-        logger.warning(f"[BaseAgent] invoke() was called on base class '{self.name}'. This is a default stub.")
-        state = self._inject_context(state)
-        state["response"] = f"[Stub] {self.name} has been invoked synchronously."
-        return state
-
-    async def ainvoke(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Async fallback implementation for BaseAgent.
-        Meant to be overridden in subclasses. Use this only for testing.
-        """
-        logger.warning(f"[BaseAgent] ainvoke() was called on base class '{self.name}'. This is a default stub.")
-        state = self._inject_context(state)
-        state["response"] = f"[Stub] {self.name} has been invoked asynchronously."
-        return state
-
-    def get_agent(self):
-        """
-        Return the inner agent object, if initialized.
+        """Invoke the supervisor workflow synchronously.
+        
+        Args:
+            state: The input state for the workflow
+            
+        Returns:
+            The output state from the workflow
         """
         if self._agent is None:
-            raise ValueError("Agent not initialized")
-        return self._agent
+            self.compile()
+            
+        # Apply context injection from BaseAgent
+        state = self._inject_context(state)
+        
+        return self._agent.invoke(state)
+        
+    async def ainvoke(self, state: Dict[str, Any]) -> Dict[str, Any]:
+        """Invoke the supervisor workflow asynchronously.
+        
+        Args:
+            state: The input state for the workflow
+            
+        Returns:
+            The output state from the workflow
+        """
+        if self._agent is None:
+            self.compile()
+            
+        # Apply context injection from BaseAgent
+        state = self._inject_context(state)
+        
+        return await self._agent.ainvoke(state)
 
     def reset(self):
+        """Reset the agent's state.
+        
+        This method resets the agent's state by clearing the checkpointer's checkpoint.
+        It allows the agent to be reused for new conversations.
         """
-        Optional reset hook for clearing internal agent state.
-        """
-        pass
+        # 重置checkpointer状态
+        if self.checkpointer:
+            self.checkpointer= None
+            
+        # 重置_app，以便下次使用时重新构建
+        self._agent = None
 
     def get_runnable(self) -> RunnableCallable:
         """

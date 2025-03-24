@@ -154,54 +154,42 @@ print(f"工作流图已保存为 {graph_path}")
 ##############################################################################
 # 从沙箱下载文件到本地的函数
 ##############################################################################
+import os
 
 def download_file_from_sandbox(sandbox, sandbox_path, local_path):
-    """从沙箱下载文件到本地
-    
-    Args:
-        sandbox: 沙箱实例
-        sandbox_path: 沙箱中的文件路径
-        local_path: 本地保存路径
-    """
+    """从 e2b 沙箱中下载文件并保存到本地，自动区分文本和二进制文件"""
     try:
-        # 从沙箱读取文件内容
-        content = sandbox.files.read(sandbox_path)
-        print(f"读取文件: {sandbox_path}, 返回类型: {type(content)}")
-        
-        # 确保目标目录存在
-        os.makedirs(os.path.dirname(local_path), exist_ok=True)
-        
-        # 判断是否为二进制文件 - 扩展支持的二进制文件类型
-        binary_extensions = ['.png', '.jpg', '.jpeg', '.gif', '.pdf', '.svg', 
-                             '.xlsx', '.xls', '.zip', '.bin', '.pyc', '.pyd',
-                             '.pptx', '.docx', '.mp3', '.mp4', '.avi', '.mov']
-        is_binary = any(sandbox_path.lower().endswith(ext) for ext in binary_extensions)
-        
-        if is_binary:
-            print(f"处理二进制文件: {sandbox_path}")
-            with open(local_path, 'wb') as file:
-                # 如果内容是字符串，尝试使用不同的编码方式
-                if isinstance(content, str):
-                    # 尝试多种编码方式，优先使用utf-8，如果失败则尝试latin1和base64
-                    try:
-                        print(f"警告: {sandbox_path}返回内容为字符串，尝试使用utf-8编码")
-                        file.write(content.encode('utf-8', errors='replace'))
-                    except Exception as e:
-                        print(f"utf-8编码失败，尝试使用latin1编码: {str(e)}")
-                        file.write(content.encode('latin1', errors='replace'))
-                else:
-                    # 直接写入二进制内容
-                    file.write(content)
-        else:
-            with open(local_path, 'w', encoding='utf-8') as file:
-                file.write(content)
-            
-        print(f"文件已从沙箱下载到本地: {local_path}")
-        return True
-    except Exception as e:
-        print(f"从沙箱下载文件时出错: {str(e)}")
-        return False
+        print(f"读取文件: {sandbox_path}")
 
+        # 判断是否为常见二进制文件类型（可自行扩展）
+        binary_extensions = (
+            '.png', '.jpg', '.jpeg', '.gif', '.pdf', '.svg',
+            '.xlsx', '.xls', '.zip', '.bin', '.pyc', '.pyd',
+            '.pptx', '.docx', '.mp3', '.mp4', '.avi', '.mov',
+        )
+        is_binary = sandbox_path.lower().endswith(binary_extensions)
+
+        # 创建目录
+        os.makedirs(os.path.dirname(local_path), exist_ok=True)
+
+        if is_binary:
+            print("📦 识别为二进制文件，使用 sandbox.download_file()")
+            content = sandbox.files.read(sandbox_path)  # 返回 bytes
+            with open(local_path, 'wb') as f:
+                f.write(content)
+        else:
+            print("📄 识别为文本文件，使用 sandbox.files.read()")
+            content = sandbox.files.read(sandbox_path)  # 返回 str
+            with open(local_path, 'w', encoding='utf-8') as f:
+                f.write(content)
+
+        print(f"✅ 文件已保存到本地: {local_path}")
+        return True
+
+    except Exception as e:
+        print(f"❌ 下载失败: {e}")
+        return False
+    
 def download_directory_from_sandbox(sandbox, sandbox_dir_path, local_dir_path):
     """从沙箱下载整个目录内容到本地
     
@@ -222,11 +210,11 @@ def download_directory_from_sandbox(sandbox, sandbox_dir_path, local_dir_path):
         # 列出沙箱中指定目录下的所有文件
         try:
             files = sandbox.files.list(sandbox_dir_path)
-            print(f"获取到文件列表: {sandbox_dir_path}, 类型: {type(files)}")
-            if files and len(files) > 0:
-                print(f"第一个文件类型: {type(files[0])}, 内容: {files[0]}")
-                # 检查对象属性
-                print(f"文件对象可用属性: {dir(files[0])}")
+            # print(f"获取到文件列表: {sandbox_dir_path}, 类型: {type(files)}")
+            # if files and len(files) > 0:
+            #     print(f"第一个文件类型: {type(files[0])}, 内容: {files[0]}")
+            #     # 检查对象属性
+            #     print(f"文件对象可用属性: {dir(files[0])}")
         except Exception as e:
             print(f"列出文件时出错: {sandbox_dir_path}, 错误: {str(e)}")
             return False
@@ -306,62 +294,33 @@ if __name__ == "__main__":
             HumanMessage(content="请生成一组模拟的公司财务数据（包括收入、支出、利润等），对数据进行分析，将处理过程（代码）和最终生成的结果保存到本地。")
         ]
     }
-    
-    # 使用stream方法逐步获取中间状态
-    final_state = None
-    for partial_state in react_agent.stream(inputs, stream_mode="values"):
-        # 保存最终状态
-        final_state = partial_state
-        
-        # 获取消息列表
-        messages = partial_state.get("messages", [])
-        if not messages:
-            continue
-            
-        # 获取最新消息
-        latest_message = messages[-1]
-        
-        # 使用log_agent_actions函数记录状态
-        log_agent_actions({"messages": [latest_message]})
-    
-    print_separator("最终回答")
-    if final_state and final_state.get("messages"):
-        for message in final_state["messages"]:
-            if isinstance(message, AIMessage) and not message.tool_calls:
-                print(message.content)
+    result = agent.invoke(inputs)
 
-                # 检查是否有 E2B 沙箱实例并下载文件
-                for msg in final_state["messages"]:
-                    if hasattr(msg, "name") and msg.name == "e2b_code_interpreter":
-                        try:
-                            # 遍历 react_agent.tools 以查找 E2B 相关工具
-                            sandbox = None
-                            for tool in react_agent.tools:
-                                if hasattr(tool, "sandbox"):
-                                    sandbox = tool.sandbox
-                                    break  # 找到后就退出循环
+    for m in result["messages"]:
+        m.pretty_print()
 
-                            if sandbox:
-                                # 设定输出目录
-                                output_dir = os.path.join(os.getcwd(), "examples/output/sandbox_files")
-                                os.makedirs(output_dir, exist_ok=True)
+    print("\n下载沙盒里的文件")
+    try:
+        # 遍历 react_agent.tools 以查找 E2B 相关工具
+        sandbox = None
+        for tool in react_agent.tools:
+            if hasattr(tool, "sandbox"):
+                sandbox = tool.sandbox
+                break  # 找到后就退出循环
 
-                                # 直接下载主要工作目录
-                                print("\n从沙箱下载文件到本地...")
-                                download_directory_from_sandbox(sandbox, "/home/user", output_dir)
+        if sandbox:
+            # 设定输出目录
+            output_dir = os.path.join(os.getcwd(), "examples/output/sandbox_files")
+            os.makedirs(output_dir, exist_ok=True)
 
-                                # 下载临时目录中可能的图表和数据文件
-                                download_directory_from_sandbox(sandbox, "/tmp", output_dir)
+            # 直接下载主要工作目录
+            print("\n从沙箱下载文件到本地...")
+            download_directory_from_sandbox(sandbox, "/home/user", output_dir)
 
-                                print(f"\n文件已保存到目录: {output_dir}")
+            # 下载临时目录中可能的图表和数据文件
+            # download_directory_from_sandbox(sandbox, "/tmp", output_dir)
 
-                        except Exception as e:
-                            print(f"从沙箱下载文件时出错: {str(e)}")
-
-    # 关闭 E2B 沙箱
-    for tool in react_agent.tools:
-        if hasattr(tool, "close"):
-            try:
-                tool.close()
-            except Exception as e:
-                print(f"关闭工具时出错: {str(e)}")
+            print(f"\n文件已保存到目录: {output_dir}")
+            sandbox.close()
+    except Exception as e:
+        print(f"从沙箱下载文件时出错: {str(e)}")

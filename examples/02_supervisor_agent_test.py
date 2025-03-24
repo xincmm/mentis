@@ -67,42 +67,42 @@ research_agent = create_react_agent(
 supervisor = SupervisorAgent(
     agents=[research_agent, joke_agent],
     model=model,
-    prompt=(
-        "You are the overall supervisor. You manage two specialized agents:\n"
-        "1) joke_agent: for telling jokes.\n"
-        "2) research_expert: for factual or data-related questions.\n\n"
-        "If the user wants a joke AND some research data in the same query, "
-        "you MUST call joke_agent first, get the joke, then call research_expert for the data. "
-        "After both calls, provide a final combined response. "
-        "Do not call more than one agent in a single LLM message; do it step by step."
-    ),
+    # prompt=(
+    #     "You are the overall supervisor. You manage two specialized agents:\n"
+    #     "1) joke_agent: for telling jokes.\n"
+    #     "2) research_expert: for factual or data-related questions.\n\n"
+    #     "If the user wants a joke AND some research data in the same query, "
+    #     "you MUST call joke_agent first, get the joke, then call research_expert for the data. "
+    #     "After both calls, provide a final combined response. "
+    #     "Do not call more than one agent in a single LLM message; do it step by step."
+    # ),
 )
 
-# 编译得到一个可调用的"App"
-app = supervisor.compile()
+# 编译得到一个可调用的"Agent"
+agent = supervisor.compile()
 
-# 获取当前文件名（不含路径和扩展名）
-import os
-current_file = os.path.basename(__file__)
-file_name_without_ext = os.path.splitext(current_file)[0]
-graph_dir = os.path.join(os.path.dirname(__file__), "graphs")
+# # 获取当前文件名（不含路径和扩展名）
+# import os
+# current_file = os.path.basename(__file__)
+# file_name_without_ext = os.path.splitext(current_file)[0]
+# graph_dir = os.path.join(os.path.dirname(__file__), "graphs")
 
-# 确保 graphs 目录存在
-os.makedirs(graph_dir, exist_ok=True)
+# # 确保 graphs 目录存在
+# os.makedirs(graph_dir, exist_ok=True)
 
-# 生成与文件名一致的图片名，并保存到 examples/graphs 目录
-image_data = app.get_graph().draw_mermaid_png()
-graph_path = os.path.join(graph_dir, f"{file_name_without_ext}.png")
+# # 生成与文件名一致的图片名，并保存到 examples/graphs 目录
+# image_data = agent.get_graph().draw_mermaid_png()
+# graph_path = os.path.join(graph_dir, f"{file_name_without_ext}.png")
 
-# 保存图片（如果已存在则覆盖）
-with open(graph_path, "wb") as f:
-    f.write(image_data)
+# # 保存图片（如果已存在则覆盖）
+# with open(graph_path, "wb") as f:
+#     f.write(image_data)
 
-print(f"Image saved as {graph_path}")
+# print(f"Image saved as {graph_path}")
 ##############################################################################
 # 测试：单个用户请求想要 "先讲笑话，再查Apple的2024年人数" 并合并结果
 ##############################################################################
-result = app.invoke({
+result = agent.invoke({
     "messages": [
         {
             "role": "user",

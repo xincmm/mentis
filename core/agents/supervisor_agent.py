@@ -4,20 +4,17 @@ import re
 from langchain_core.language_models import LanguageModelLike
 from langchain_core.tools import BaseTool
 from langgraph.graph import StateGraph
-from langgraph.graph.state import CompiledStateGraph
+from langgraph.types import Checkpointer
 from langgraph.prebuilt.chat_agent_executor import (
     AgentState,
     StateSchemaType,
 )
 from core.agents.supervisor import create_supervisor
 from core.agents.base.base_agent import BaseAgent
-from core.agents.react_agent import ReactAgent
-from core.agents.research_agent import ResearchAgent
-from core.agents.coder_agent import CoderAgent
-from core.agents.reporter_agent import ReporterAgent
-from core.agents.designer_agent import DesignerAgent
-from core.agents.data_analyst_agent import DataAnalystAgent
 from core.tools.todolist_tool import TodolistTool
+import logging
+
+logger = logging.getLogger(__name__)
 
 class SupervisorAgent(BaseAgent):
     """Supervisor class for managing multiple agents with planning capabilities.
@@ -107,31 +104,27 @@ Remember: A well-structured todolist is essential for successful task completion
 
 1. FIRST, carefully analyze the user's request and break it down into clear, actionable tasks
 2. Identify which agent is best suited for each part of the task
-3. Use the handoff tools to delegate tasks to appropriate agents
-4. Synthesize the results and provide a coherent response to the user
-5. Provide a final summary when all tasks are done
-
-## IMPORTANT: Coordination Guidelines
-
-- Always analyze the user's request thoroughly before delegating tasks
-- Choose the most appropriate agent for each subtask based on their capabilities
-- Provide clear instructions when handing off tasks to other agents
-- Maintain context and continuity throughout the conversation
-- Synthesize information from multiple agents into coherent responses
+3. Use the handoff tools to delegate tasks to appropriate agents ONE AT A TIME
+4. WAIT for each agent to COMPLETELY FINISH their assigned task before proceeding
+5. Review the output from each agent before delegating the next task
+6. Maintain a sequential workflow - never delegate multiple tasks simultaneously
+7. Synthesize the results and provide a coherent response to the user
+8. Provide a final summary when all tasks are done
 
 Remember: Effective coordination is essential for successful task completion. Take time to understand the request and delegate appropriately.
 """
 
     def __init__(
         self,
-        agents: List[ReactAgent],
+        agents: List[BaseAgent],
         model: LanguageModelLike,
         tools: Optional[List[Union[BaseTool, Callable]]] = None,
         prompt: Optional[str] = None,
         state_schema: StateSchemaType = AgentState,
         supervisor_name: str = "supervisor",
-        output_mode: str = "last_message",
-        enable_planning: bool = True,
+        checkpointer: Optional[Checkpointer] = None,
+        output_mode: str = "last_message", # * full_history or last_message *
+        enable_planning: bool = False,
     ):
         """Initialize a supervisor.
         
@@ -142,50 +135,51 @@ Remember: Effective coordination is essential for successful task completion. Ta
             prompt: Optional prompt to use for the supervisor
             state_schema: State schema to use for the supervisor graph
             supervisor_name: Name of the supervisor node
+            checkpointer: Optional checkpointer to use for the supervisor
             output_mode: Mode for adding agent outputs to the message history
                 ("full_history" or "last_message")
             enable_planning: Whether to enable planning capabilities with todolist
         """
         # Create todolist tool if planning is enabled
-        self.enable_planning = enable_planning
-        self.todolist_tool = TodolistTool() if enable_planning else None
+        self._enable_planning = enable_planning
+        self._todolist_tool = TodolistTool() if enable_planning else None
         
         # Add todolist tool to the tools list if planning is enabled
         if enable_planning and tools is not None:
-            tools = tools + [self.todolist_tool]
+            tools = tools + [self._todolist_tool]
         elif enable_planning:
-            tools = [self.todolist_tool]
+            tools = [self._todolist_tool]
         
-        # 方案一和方案二的实现
-        base_prompt = ""
-        if enable_planning:
-            base_prompt = self._PLANNING_PROMPT_TEMPLATE
-        else:
-            base_prompt = self._BASE_PROMPT_TEMPLATE
+        # Determine the base prompt based on planning mode
+        base_prompt = self._PLANNING_PROMPT_TEMPLATE if enable_planning else self._BASE_PROMPT_TEMPLATE
             
+        # Store agent-specific attributes before super().__init__
+        self.agents = agents
+        self.output_mode = output_mode
+        self.supervisor_name = supervisor_name
+        self.state_schema = state_schema
+        self.checkpointer = checkpointer
+        self._workflow = None
+        self._agent = None
+        
+        # Generate final prompt
+        _final_prompt = base_prompt
         if prompt is None:
-            # 方案二：根据传入的agents自动生成适配的提示词
-            agents_prompt = self._generate_agents_prompt(agents)
-            prompt = base_prompt + agents_prompt
+            # Generate prompt based on available agents
+            _agents_prompt = self._generate_agents_prompt()
+            _final_prompt = base_prompt + _agents_prompt
         else:
-            # 方案一：将自定义prompt追加到默认提示词后面
-            prompt = base_prompt + "\n\n" + prompt
+            # Append custom prompt to default template
+            _final_prompt = base_prompt + "\n\n" + prompt
         
         # Initialize the BaseAgent parent class
         super().__init__(
             name=supervisor_name,
             model=model,
             tools=tools,
-            prompt=prompt,
+            checkpointer=checkpointer,
+            prompt=_final_prompt,
         )
-        
-        # Store supervisor-specific attributes
-        self.agents = agents
-        self.output_mode = output_mode
-        self.supervisor_name = supervisor_name
-        self.state_schema = state_schema
-        self._workflow = None
-        self._app = None
     
     def build(self) -> StateGraph:
         """Build the supervisor workflow.
@@ -196,8 +190,22 @@ Remember: Effective coordination is essential for successful task completion. Ta
         if self._workflow is not None:
             return self._workflow
             
+        # Get the agent objects from BaseAgent instances
+        agent_objects = []
+        for agent in self.agents:
+            if hasattr(agent, "get_agent") and callable(agent.get_agent):
+                try:
+                    agent_objects.append(agent.get_agent())
+                except Exception as e:
+                    logger.warning(f"Failed to get agent from {agent.name}: {str(e)}")
+                    # Fallback to using the agent directly if get_agent fails
+                    agent_objects.append(agent)
+            else:
+                # If the agent doesn't have a get_agent method, use it directly
+                agent_objects.append(agent)
+            
         self._workflow = create_supervisor(
-            agents=self.agents,
+            agents=agent_objects,
             model=self.model,
             tools=self.tools,
             prompt=self.prompt,
@@ -207,38 +215,13 @@ Remember: Effective coordination is essential for successful task completion. Ta
         )
         
         return self._workflow
+
         
-    def get_agent(self) -> StateGraph:
-        """Get the underlying supervisor workflow.
-        
-        Returns:
-            The StateGraph object
-        """
-        if self._workflow is None:
-            self._workflow = self.build()
-            
-        return self._workflow
-        
-    def compile(self) -> CompiledStateGraph: 
-        """Compile the supervisor workflow.
-        
-        Returns:
-            The compiled application
-        """
-        if self._workflow is None:
-            self.build()
-        
-        self._app = self._workflow.compile()
-        return self._app
-        
-    def _generate_agents_prompt(self, agents: List[ReactAgent]) -> str:
+    def _generate_agents_prompt(self) -> str:
         """Generate a prompt based on the types of agents provided.
         
         This method analyzes the agent types and generates appropriate descriptions
         for each agent to be included in the supervisor prompt.
-        
-        Args:
-            agents: List of agents to generate descriptions for
             
         Returns:
             A string containing descriptions of all agents
@@ -247,33 +230,20 @@ Remember: Effective coordination is essential for successful task completion. Ta
         agent_descriptions.append("\n\n## Available Agents\n")
         agent_descriptions.append("You have access to the following specialized agents:\n")
         
-        for agent in agents:
+        for agent in self.agents:
             if isinstance(agent, dict) and "name" in agent:
                 # Handle dict-like agents with name attribute
                 agent_name = agent["name"]
+                agent_desc = agent.get("description", f"Handles tasks related to '{agent_name}'")
             elif hasattr(agent, "name"):
                 # Handle object-like agents with name attribute
                 agent_name = agent.name
+                agent_desc = getattr(agent, "description", f"Handles tasks related to '{agent_name}'")
             else:
                 # Skip agents without name
                 continue
                 
-            # Generate description based on agent type or name
-            if "research" in agent_name.lower() or isinstance(agent, ResearchAgent):
-                agent_descriptions.append(f"- **{agent_name}**: Specialized in gathering information and conducting research. Use for tasks requiring information retrieval, fact-checking, and synthesizing data from multiple sources.")
-            elif "coder" in agent_name.lower() or isinstance(agent, CoderAgent):
-                agent_descriptions.append(f"- **{agent_name}**: Specialized in writing, debugging, and optimizing code. Use for programming tasks, code generation, and technical problem-solving.")
-            elif "reporter" in agent_name.lower() or isinstance(agent, ReporterAgent):
-                agent_descriptions.append(f"- **{agent_name}**: Specialized in creating comprehensive reports and documentation. Use for summarizing information, creating structured documents, and presenting findings.")
-            elif "designer" in agent_name.lower() or isinstance(agent, DesignerAgent):
-                agent_descriptions.append(f"- **{agent_name}**: Specialized in UI/UX design and visual communication. Use for creating design mockups, improving user interfaces, and visual elements.")
-            elif "data" in agent_name.lower() and "analyst" in agent_name.lower() or isinstance(agent, DataAnalystAgent):
-                agent_descriptions.append(f"- **{agent_name}**: Specialized in data analysis and visualization. Use for analyzing datasets, creating visualizations, and extracting insights from data.")
-            elif "joke" in agent_name.lower():
-                agent_descriptions.append(f"- **{agent_name}**: Specialized in generating humor and entertainment content. Use for creating jokes, witty remarks, and light-hearted content.")
-            else:
-                # Generic description for unknown agent types
-                agent_descriptions.append(f"- **{agent_name}**: A specialized agent that can help with specific tasks.")
+            agent_descriptions.append(f"- **{agent_name}**: {agent_desc}")
         
         agent_descriptions.append("\n## Agent Selection Guidelines\n")
         agent_descriptions.append("When deciding which agent to use for a task:\n")
@@ -281,5 +251,17 @@ Remember: Effective coordination is essential for successful task completion. Ta
         agent_descriptions.append("2. For complex tasks, break them down and assign different components to appropriate agents")
         agent_descriptions.append("3. Ensure clear handoffs between agents when multiple agents are needed")
         agent_descriptions.append("4. Synthesize outputs from multiple agents into a coherent response")
+        
+        agent_descriptions.append("\n## Handoff Guidelines\n")
+        agent_descriptions.append("When transferring tasks between agents:\n")
+        agent_descriptions.append("1. Provide clear and specific instructions about what you need the agent to accomplish")
+        agent_descriptions.append("2. Include all necessary context and background information in your handoff")
+        agent_descriptions.append("3. Specify the expected output format or deliverables you need from the agent")
+        agent_descriptions.append("4. Use handoffs only when the task clearly aligns with a specialized agent's capabilities")
+        agent_descriptions.append("5. ALWAYS wait for the agent to COMPLETELY finish their current task before proceeding")
+        agent_descriptions.append("6. NEVER delegate tasks to multiple agents simultaneously")
+        agent_descriptions.append("7. When an agent returns control to you, thoroughly review their output before proceeding")
+        agent_descriptions.append("8. Confirm task completion before moving to the next task or agent")
+        agent_descriptions.append("9. For multi-step processes, maintain a strict sequential order of handoffs with proper context preservation")
         
         return "\n".join(agent_descriptions)

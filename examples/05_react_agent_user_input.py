@@ -89,27 +89,7 @@ def create_react_agent_instance():
     )
     
     # 获取图对象并保存
-    agent = react_agent.compile()
-    graph = agent.get_graph()
-    
-    # 获取当前文件名（不含路径和扩展名）
-    current_file = os.path.basename(__file__)
-    file_name_without_ext = os.path.splitext(current_file)[0]
-    graph_dir = os.path.join(os.path.dirname(__file__), "graphs")
-    
-    # 确保 graphs 目录存在
-    os.makedirs(graph_dir, exist_ok=True)
-    
-    # 生成与文件名一致的图片名，并保存到 examples/graphs 目录
-    image_data = graph.draw_mermaid_png()
-    graph_path = os.path.join(graph_dir, f"{file_name_without_ext}.png")
-    
-    # 保存图片（如果已存在则覆盖）
-    with open(graph_path, "wb") as f:
-        f.write(image_data)
-    
-    print(f"图表已保存为 {graph_path}")
-    
+    agent = react_agent.compile()    
     return agent
 
 ##############################################################################
