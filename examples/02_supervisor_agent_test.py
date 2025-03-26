@@ -1,4 +1,5 @@
 from langgraph.prebuilt import create_react_agent
+from core.agents.base.react_agent import ReactAgent
 from core.agents.supervisor_agent import SupervisorAgent
 from langchain_openai import ChatOpenAI
 from langgraph.func import entrypoint, task
@@ -48,7 +49,17 @@ def web_search(query: str) -> str:
         "5. **Google (Alphabet)**: 181,269 employees."
     )
 
-research_agent = create_react_agent(
+# research_agent = create_react_agent(
+#     model=model,
+#     tools=[web_search],
+#     name="research_expert",
+#     # Prompt 告诉它是一个研究型 Agent，可调用 web_search
+#     prompt=(
+#         "You are a world-class researcher. You have access to a 'web_search(query: str)' tool. "
+#         "Do not do any complicated math, just provide factual info from the web_search if needed."
+#     ),
+# )
+research_agent = ReactAgent(
     model=model,
     tools=[web_search],
     name="research_expert",
@@ -79,7 +90,7 @@ supervisor = SupervisorAgent(
 )
 
 # 编译得到一个可调用的"Agent"
-agent = supervisor.compile()
+# agent = supervisor.compile()
 
 # # 获取当前文件名（不含路径和扩展名）
 # import os
@@ -102,7 +113,7 @@ agent = supervisor.compile()
 ##############################################################################
 # 测试：单个用户请求想要 "先讲笑话，再查Apple的2024年人数" 并合并结果
 ##############################################################################
-result = agent.invoke({
+result = supervisor.run({
     "messages": [
         {
             "role": "user",

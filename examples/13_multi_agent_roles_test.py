@@ -187,6 +187,7 @@ coder_agent = CoderAgent(
     tools=[e2b_tool],
     max_iterations=5,
     cache_enabled=True,
+    debug=True
 )
 
 ##############################################################################
@@ -236,7 +237,9 @@ supervisor = SupervisorAgent(
         data_analyst_agent,
     ],
     model=model,
-enable_planning=True)
+    enable_planning=True,
+    output_mode="last_message"
+)
 
 # 获取当前文件名（不含路径和扩展名）
 current_file = os.path.basename(__file__)
@@ -277,7 +280,7 @@ if __name__ == "__main__":
                     {
                         "role": "user",
                         "content": (
-                            "我需要一个简单的Python爬虫来获取https://huggingface.co/posts 所有post，并将结果保存为CSV文件,放在/home/user下面。"
+                            "我需要一个简单的Python爬虫来获取 https://baoyu.io/ 所有post，并将结果保存为CSV文件,放在/home/user下面。"
                             "为了确保你争取爬取到了信息，请把爬取的信息以Markdown 格式返回。"
                             "如果遇到问题，请重试。"
                         )

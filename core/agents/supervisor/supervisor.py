@@ -186,6 +186,7 @@ def create_supervisor(
         prompt=prompt,
         state_schema=state_schema,
         response_format=response_format,
+        debug=False,
     )
     supervisor_agent = _react_agent.compile()
     # Build the multi-agent supervisor graph using the langgraph StateGraph setup
@@ -193,6 +194,10 @@ def create_supervisor(
     builder.add_node(supervisor_agent, destinations=tuple(agent_names) + (END,))
     builder.add_edge(START, supervisor_agent.name)
     for agent in agents:
+        # If agent is a "ReactAgent" or similar
+        if hasattr(agent, "get_agent") and callable(agent.get_agent):
+            agent = agent.get_agent()  # retrieve the compiled subgraph
+       
         builder.add_node(
             agent.name,
             _make_call_agent(

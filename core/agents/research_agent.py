@@ -263,58 +263,58 @@ Available tools:
         self.clear_history()
         self.clear_cache()
         
-    def invoke(self, state: AgentState, config: Optional[Dict[str, Any]] = None) -> AgentState:
-        """Override invoke method to add iteration limit check and auto-reset.
+    # def invoke(self, state: AgentState, config: Optional[Dict[str, Any]] = None) -> AgentState:
+    #     """Override invoke method to add iteration limit check and auto-reset.
         
-        Args:
-            state: The current state of the agent.
-            config: Optional configuration for the agent.
+    #     Args:
+    #         state: The current state of the agent.
+    #         config: Optional configuration for the agent.
             
-        Returns:
-            The updated state after agent execution.
-        """
-        # Check if iteration limit has been reached
-        if self.has_reached_limit():
-            if self.debug:
-                print(f"[{self.name}] Maximum iterations {self.max_iterations} reached, automatically resetting state")
-            self.reset()
+    #     Returns:
+    #         The updated state after agent execution.
+    #     """
+    #     # Check if iteration limit has been reached
+    #     if self.has_reached_limit():
+    #         if self.debug:
+    #             print(f"[{self.name}] Maximum iterations {self.max_iterations} reached, automatically resetting state")
+    #         self.reset()
             
-        try:
-            return self._agent.invoke(state, config)
-        except RecursionError as e:
-            error_msg = f"[{self.name}] Recursion depth exceeded error: {str(e)}. State automatically reset."
-            print(error_msg)
-            self.reset()
-            return {"error": error_msg, "messages": state.get("messages", [])}
-        except Exception as e:
-            error_msg = f"[{self.name}] Execution error: {str(e)}"
-            print(error_msg)
-            return {"error": error_msg, "messages": state.get("messages", [])}
+    #     try:
+    #         return self._agent.invoke(state, config)
+    #     except RecursionError as e:
+    #         error_msg = f"[{self.name}] Recursion depth exceeded error: {str(e)}. State automatically reset."
+    #         print(error_msg)
+    #         self.reset()
+    #         return {"error": error_msg, "messages": state.get("messages", [])}
+    #     except Exception as e:
+    #         error_msg = f"[{self.name}] Execution error: {str(e)}"
+    #         print(error_msg)
+    #         return {"error": error_msg, "messages": state.get("messages", [])}
             
-    async def ainvoke(self, state: AgentState, config: Optional[Dict[str, Any]] = None) -> AgentState:
-        """Override ainvoke method to add iteration limit check and auto-reset.
+    # async def ainvoke(self, state: AgentState, config: Optional[Dict[str, Any]] = None) -> AgentState:
+    #     """Override ainvoke method to add iteration limit check and auto-reset.
         
-        Args:
-            state: The current state of the agent.
-            config: Optional configuration for the agent.
+    #     Args:
+    #         state: The current state of the agent.
+    #         config: Optional configuration for the agent.
             
-        Returns:
-            The updated state after agent execution.
-        """
-        # Check if iteration limit has been reached
-        if self.has_reached_limit():
-            if self.debug:
-                print(f"[{self.name}] Maximum iterations {self.max_iterations} reached, automatically resetting state")
-            self.reset()
+    #     Returns:
+    #         The updated state after agent execution.
+    #     """
+    #     # Check if iteration limit has been reached
+    #     if self.has_reached_limit():
+    #         if self.debug:
+    #             print(f"[{self.name}] Maximum iterations {self.max_iterations} reached, automatically resetting state")
+    #         self.reset()
             
-        try:
-            return await self._agent.ainvoke(state, config)
-        except RecursionError as e:
-            error_msg = f"[{self.name}] Recursion depth exceeded error: {str(e)}. State automatically reset."
-            print(error_msg)
-            self.reset()
-            return {"error": error_msg, "messages": state.get("messages", [])}
-        except Exception as e:
-            error_msg = f"[{self.name}] Execution error: {str(e)}"
-            print(error_msg)
-            return {"error": error_msg, "messages": state.get("messages", [])}
+    #     try:
+    #         return await self._agent.ainvoke(state, config)
+    #     except RecursionError as e:
+    #         error_msg = f"[{self.name}] Recursion depth exceeded error: {str(e)}. State automatically reset."
+    #         print(error_msg)
+    #         self.reset()
+    #         return {"error": error_msg, "messages": state.get("messages", [])}
+    #     except Exception as e:
+    #         error_msg = f"[{self.name}] Execution error: {str(e)}"
+    #         print(error_msg)
+    #         return {"error": error_msg, "messages": state.get("messages", [])}

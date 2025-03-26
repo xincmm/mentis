@@ -5,8 +5,8 @@ from langchain_core.messages import SystemMessage, BaseMessage
 from langchain_core.tools import BaseTool
 from langgraph.graph import StateGraph
 from langgraph.types import Checkpointer
+from langgraph.graph.graph import CompiledGraph
 from langgraph.graph.state import CompiledStateGraph
-from langgraph.utils.runnable import RunnableCallable
 import logging
 
 logger = logging.getLogger(__name__)
@@ -41,7 +41,7 @@ class BaseAgent:
         self.max_context_tokens = max_context_tokens
         self.model_name = model_name
         self._workflow = None
-        self._agent = None
+        self._agent:Optional[CompiledGraph] = None
 
     def _estimate_tokens(self, message: BaseMessage) -> int:
         """
@@ -189,6 +189,14 @@ class BaseAgent:
         # 重置_app，以便下次使用时重新构建
         self._agent = None
 
+    def get_agent(self) -> CompiledGraph:
+        """
+        Return the compiled agent agent object
+        """
+        if self._agent is None:
+            self.compile()
+        return self._agent
+    
     def add_tools(self, tools: List[BaseTool]) -> None:
         """Add tools to the agent and update the prompt.
 
