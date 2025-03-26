@@ -6,6 +6,7 @@ from core.agents.reporter_agent import ReporterAgent
 from core.agents.designer_agent import DesignerAgent
 from core.agents.data_analyst_agent import DataAnalystAgent
 from langchain_openai import ChatOpenAI
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langgraph.func import entrypoint, task
 from langgraph.graph import add_messages
 from dotenv import load_dotenv
@@ -14,6 +15,7 @@ import os
 import logging
 import sys
 import io
+import json
 from contextlib import redirect_stdout, redirect_stderr
 
 load_dotenv()  # 自动加载 .env 文件
@@ -40,6 +42,126 @@ class LogCapture:
         return "\n".join(self.log_content)
 
 log_capture = LogCapture()
+
+##############################################################################
+# 从沙箱下载文件到本地的函数
+##############################################################################
+
+def download_file_from_sandbox(sandbox, sandbox_path, local_path):
+    """从 e2b 沙箱中下载文件并保存到本地，自动区分文本和二进制文件"""
+    try:
+        print(f"读取文件: {sandbox_path}")
+
+        # 判断是否为常见二进制文件类型（可自行扩展）
+        binary_extensions = (
+            '.png', '.jpg', '.jpeg', '.gif', '.pdf', '.svg',
+            '.xlsx', '.xls', '.zip', '.bin', '.pyc', '.pyd',
+            '.pptx', '.docx', '.mp3', '.mp4', '.avi', '.mov',
+        )
+        is_binary = sandbox_path.lower().endswith(binary_extensions)
+
+        # 创建目录
+        os.makedirs(os.path.dirname(local_path), exist_ok=True)
+
+        if is_binary:
+            print("📦 识别为二进制文件，使用 sandbox.download_file()")
+            content = sandbox.files.read(sandbox_path)  # 返回 bytes
+            with open(local_path, 'wb') as f:
+                f.write(content)
+        else:
+            print("📄 识别为文本文件，使用 sandbox.files.read()")
+            content = sandbox.files.read(sandbox_path)  # 返回 str
+            with open(local_path, 'w', encoding='utf-8') as f:
+                f.write(content)
+
+        print(f"✅ 文件已保存到本地: {local_path}")
+        return True
+
+    except Exception as e:
+        print(f"❌ 下载失败: {e}")
+        return False
+
+def download_directory_from_sandbox(sandbox, sandbox_dir_path, local_dir_path):
+    """从沙箱下载整个目录内容到本地
+    
+    Args:
+        sandbox: 沙箱实例
+        sandbox_dir_path: 沙箱中的目录路径
+        local_dir_path: 本地保存目录路径
+    
+    Returns:
+        bool: 是否成功下载所有文件
+    """
+    try:
+        print(f"尝试下载目录: {sandbox_dir_path} -> {local_dir_path}")
+        
+        # 确保本地目录存在
+        os.makedirs(local_dir_path, exist_ok=True)
+        
+        # 列出沙箱中指定目录下的所有文件
+        try:
+            files = sandbox.files.list(sandbox_dir_path)
+        except Exception as e:
+            print(f"列出文件时出错: {sandbox_dir_path}, 错误: {str(e)}")
+            return False
+        
+        if not files:
+            print(f"沙箱中目录 {sandbox_dir_path} 为空或不存在")
+            return False
+            
+        downloaded_count = 0
+        # 定义需要跳过的系统文件
+        skip_files = {'.bashrc', '.bash_logout', '.profile'}
+        
+        # 遍历并下载每个文件
+        for file_info in files:
+            try:
+                # 尝试安全获取name和type属性
+                file_name = getattr(file_info, "name", None)
+                if file_name is None:
+                    print(f"警告: 无法获取文件名, 跳过此文件")
+                    continue
+                    
+                file_type = getattr(file_info, "type", "file")  # 默认为文件类型
+                # 如果 file_type 是枚举, 使用其 value 进行判断
+                type_value = file_type.value if hasattr(file_type, "value") else file_type
+                
+                # 跳过不需要的系统文件或系统目录（隐藏文件/目录）
+                if file_name in skip_files or (file_name.startswith('.') and type_value == 'dir'):
+                    print(f"跳过系统文件或目录: {file_name}")
+                    continue
+                
+                print(f"处理文件: {file_name}, 类型: {type_value}")
+                
+                sandbox_file_path = f"{sandbox_dir_path}/{file_name}"
+                local_file_path = os.path.join(local_dir_path, file_name)
+                
+                if type_value == 'dir':
+                    # 递归下载子目录
+                    print(f"发现子目录: {sandbox_file_path}")
+                    if download_directory_from_sandbox(sandbox, sandbox_file_path, local_file_path):
+                        downloaded_count += 1
+                else:
+                    # 下载文件
+                    print(f"下载文件: {sandbox_file_path} -> {local_file_path}")
+                    if download_file_from_sandbox(sandbox, sandbox_file_path, local_file_path):
+                        downloaded_count += 1
+            except Exception as e:
+                print(f"处理文件时出错: {str(e)}")
+                import traceback
+                print(f"详细错误跟踪: {traceback.format_exc()}")
+                continue
+        
+        if downloaded_count > 0:
+            print(f"从 {sandbox_dir_path} 下载了 {downloaded_count} 个文件/目录到 {local_dir_path}")
+            return True
+        return False
+        
+    except Exception as e:
+        print(f"下载整个目录时出错: {str(e)}")
+        import traceback
+        print(f"详细错误跟踪: {traceback.format_exc()}")
+
 
 ##############################################################################
 # Agent 2: Research Expert - 使用自定义的ResearchAgent
@@ -150,39 +272,50 @@ if __name__ == "__main__":
             
             # 测试1：需要研究和编码的任务
             print("\n## 测试1：需要研究和编码的任务")
-            result1 = supervisor.run({
+            final_state = supervisor.run({
                 "messages": [
                     {
                         "role": "user",
                         "content": (
-                            "我需要一个简单的Python爬虫来获取最新的科技新闻，并将结果保存为CSV文件。"
-                            "请提供完整的代码，并确保代码能够正常运行。"
-                            "最后，讲个笑话来缓解一下压力。"
+                            "我需要一个简单的Python爬虫来获取https://huggingface.co/posts 所有post，并将结果保存为CSV文件,放在/home/user下面。"
+                            "为了确保你争取爬取到了信息，请把爬取的信息以Markdown 格式返回。"
+                            "如果遇到问题，请重试。"
                         )
                     }
                 ]
             })
             
             print("\n测试1结果:")
-            for m in result1["messages"]:
+            for m in final_state["messages"]:
                 m.pretty_print()
             
-            # # 测试2：需要设计和数据分析的任务
-            # result2 = app.invoke({
-            #     "messages": [
-            #         {
-            #             "role": "user",
-            #             "content": (
-            #                 "我有一个电商网站，需要重新设计产品页面，并分析现有的用户行为数据来优化转化率。"
-            #                 "请提供一个设计方案和数据分析建议。最后，讲个笑话来缓解一下压力。"
-            #             )
-            #         }
-            #     ]
-            # })
-            
-            # print("\n测试2结果:")
-            # for m in result2["messages"]:
-            #     m.pretty_print()
+            # 遍历 react_agent.tools 以查找 E2B 相关工具
+            try:
+            # 遍历 react_agent.tools 以查找 E2B 相关工具
+                sandbox = None
+                for tool in coder_agent.tools:
+                    if hasattr(tool, "sandbox"):
+                        sandbox = tool.sandbox
+                        break  # 找到后就退出循环
+
+                if sandbox:
+                    # 设定输出目录
+                    output_dir = os.path.join(os.getcwd(), "examples/output/sandbox_files")
+                    os.makedirs(output_dir, exist_ok=True)
+
+                    # 直接下载主要工作目录
+                    print("\n从沙箱下载文件到本地...")
+                    download_directory_from_sandbox(sandbox, "/home/user", output_dir)
+
+                    # 下载临时目录中可能的图表和数据文件
+                    # download_directory_from_sandbox(sandbox, "/tmp", output_dir)
+
+                    print(f"\n文件已保存到目录: {output_dir}")
+                    sandbox.close()
+            except Exception as e:
+                print(f"从沙箱下载文件时出错: {str(e)}")
+
+           
     finally:
         # 停止捕获并保存结果
         log_capture.stop_capture()

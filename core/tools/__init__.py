@@ -37,22 +37,6 @@ def preregister_core_tools():
     except Exception as e:
         print(f"预注册Tavily搜索工具失败: {e}")
     
-    try:
-        # Jina搜索工具
-        jina_search = JinaSearch()
-        register_tool(jina_search, ToolCategory.SEARCH)
-        print(f"已预注册工具: {jina_search.name} (类别: {ToolCategory.SEARCH.value})")
-    except Exception as e:
-        print(f"预注册Jina搜索工具失败: {e}")
-    
-    try:
-        # Wikipedia查询工具
-        wikipedia_tool = WikipediaQueryRun()
-        register_tool(wikipedia_tool, ToolCategory.SEARCH)
-        print(f"已预注册工具: {wikipedia_tool.name} (类别: {ToolCategory.SEARCH.value})")
-    except Exception as e:
-        print(f"预注册Wikipedia查询工具失败: {e}")
-    
     # 注册网页浏览类工具
     try:
         # Arxiv查询工具
@@ -93,31 +77,31 @@ def preregister_core_tools():
     except Exception as e:
         print(f"预注册文件系统工具失败: {e}")
     
-    # 注册代码解释器工具
-    try:
-        # Python REPL工具
-        python_repl = ExecPython()
-        register_tool(python_repl, ToolCategory.CODE_INTERPRETER)
-        print(f"已预注册工具: {python_repl.name} (类别: {ToolCategory.CODE_INTERPRETER.value})")
-    except Exception as e:
-        print(f"预注册Python REPL工具失败: {e}")
+    # # 注册代码解释器工具
+    # try:
+    #     # Python REPL工具
+    #     python_repl = ExecPython()
+    #     register_tool(python_repl, ToolCategory.CODE_INTERPRETER)
+    #     print(f"已预注册工具: {python_repl.name} (类别: {ToolCategory.CODE_INTERPRETER.value})")
+    # except Exception as e:
+    #     print(f"预注册Python REPL工具失败: {e}")
 
-    # 注册代码解释器工具
-    try:
-        # Python REPL工具
-        javascript_repl = ExecJavaScript()
-        register_tool(javascript_repl, ToolCategory.CODE_INTERPRETER)
-        print(f"已预注册工具: {javascript_repl.name} (类别: {ToolCategory.CODE_INTERPRETER.value})")
-    except Exception as e:
-        print(f"预注册Python REPL工具失败: {e}")
+    # # 注册代码解释器工具
+    # try:
+    #     # Python REPL工具
+    #     javascript_repl = ExecJavaScript()
+    #     register_tool(javascript_repl, ToolCategory.CODE_INTERPRETER)
+    #     print(f"已预注册工具: {javascript_repl.name} (类别: {ToolCategory.CODE_INTERPRETER.value})")
+    # except Exception as e:
+    #     print(f"预注册Python REPL工具失败: {e}")
     
-    # 注册自定义工具 - FireCrawl工具
-    try:
-        firecrawl_tool = FireCrawlTool()
-        register_tool(firecrawl_tool, ToolCategory.WEB_BROWSING)
-        print(f"已预注册工具: {firecrawl_tool.name} (类别: {ToolCategory.WEB_BROWSING.value})")
-    except Exception as e:
-        print(f"预注册FireCrawl工具失败: {e}")
+    # # 注册自定义工具 - FireCrawl工具
+    # try:
+    #     firecrawl_tool = FireCrawlTool()
+    #     register_tool(firecrawl_tool, ToolCategory.WEB_BROWSING)
+    #     print(f"已预注册工具: {firecrawl_tool.name} (类别: {ToolCategory.WEB_BROWSING.value})")
+    # except Exception as e:
+    #     print(f"预注册FireCrawl工具失败: {e}")
     
     # # 注册E2B代码解释器工具
     # try:
