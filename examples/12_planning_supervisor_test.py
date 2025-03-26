@@ -1,6 +1,7 @@
 from langgraph.prebuilt import create_react_agent
 from core.agents.supervisor_agent import SupervisorAgent
 from core.agents.research_agent import ResearchAgent
+from core.agents.base.react_agent import ReactAgent
 from langchain_openai import ChatOpenAI
 from langgraph.func import entrypoint, task
 from langgraph.graph import add_messages
@@ -40,14 +41,14 @@ joke_agent.name = "joke_agent"
 # Agent 2: Research Expert with Tavily Search (Graph API)
 ##############################################################################
 
-# # 创建Tavily搜索工具
-# tavily_search = TavilySearchResults(
-#     max_results=3,
-#     include_answer=True,
-#     include_raw_content=False,
-#     include_images=False,
-#     search_depth="advanced"
-# )
+# 创建Tavily搜索工具
+tavily_search = TavilySearchResults(
+    max_results=3,
+    include_answer=True,
+    include_raw_content=False,
+    include_images=False,
+    search_depth="advanced"
+)
 
 # 使用我们自定义的ResearchAgent替代create_react_agent创建的agent
 research_agent = ResearchAgent(
@@ -57,6 +58,10 @@ research_agent = ResearchAgent(
     cache_enabled=True,
     debug=False
 )
+research_agent_2 = ReactAgent(
+    name="research_expert",
+    model=model,
+    tools=[tavily_search])
 
 ##############################################################################
 # 使用带有Planning功能的SupervisorAgent
@@ -64,7 +69,7 @@ research_agent = ResearchAgent(
 
 # 创建 SupervisorAgent 实例，启用Planning功能
 supervisor = SupervisorAgent(
-    agents=[research_agent, joke_agent],
+    agents=[joke_agent,research_agent_2],
     model=model,
 )
 ##############################################################################

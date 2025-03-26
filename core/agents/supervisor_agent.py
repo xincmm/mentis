@@ -10,6 +10,7 @@ from langgraph.prebuilt.chat_agent_executor import (
     AgentState,
     StateSchemaType,
 )
+from langgraph.utils.runnable import RunnableCallable
 from core.agents.supervisor import create_supervisor
 from core.agents.supervisor.simple_planning_tool import SimplePlanningTool
 from core.agents.base.base_agent import BaseAgent
@@ -203,25 +204,12 @@ Important:
         Returns:
             The built StateGraph
         """
+        
         if self._workflow is not None:
             return self._workflow
             
-        # Get the agent objects from BaseAgent instances
-        agent_objects = []
-        for agent in self.agents:
-            if hasattr(agent, "get_agent") and callable(agent.get_agent):
-                try:
-                    agent_objects.append(agent.get_agent())
-                except Exception as e:
-                    logger.warning(f"Failed to get agent from {agent.name}: {str(e)}")
-                    # Fallback to using the agent directly if get_agent fails
-                    agent_objects.append(agent)
-            else:
-                # If the agent doesn't have a get_agent method, use it directly
-                agent_objects.append(agent)
-            
         self._workflow = create_supervisor(
-            agents=agent_objects,
+            agents=self.agents,
             model=self.model,
             tools=self.tools,
             prompt=self.prompt,
@@ -231,6 +219,3 @@ Important:
         )
         
         return self._workflow
-
-    def compile(self) -> CompiledStateGraph:
-        return super().compile()

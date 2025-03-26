@@ -2,6 +2,7 @@ from typing import Any, Callable, Dict, List, Optional, Type, Union, Literal, Se
 
 from langchain_core.language_models import LanguageModelLike
 from langchain_core.tools import BaseTool
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langgraph.graph import StateGraph
 from langgraph.graph.graph import CompiledGraph
 from langgraph.types import Checkpointer
@@ -12,8 +13,12 @@ from langgraph.prebuilt.chat_agent_executor import (
     StateSchemaType,
     StructuredResponseSchema,
 )
+from langchain_core.runnables.config import RunnableConfig
+from langgraph.utils.runnable import RunnableCallable
 from core.agents.base.base_agent import BaseAgent
-
+from core.agents.base.create_react_agent_wrapper import CreateReactAgentWrapper
+import logging
+logger = logging.getLogger(__name__)
 
 class ReactAgent(BaseAgent):
     """ReAct Agent class for reasoning and acting with tools.
@@ -94,7 +99,7 @@ class ReactAgent(BaseAgent):
         if self._agent is not None:
             return self._agent
             
-        self._agent = create_react_agent(
+        _react_agent = create_react_agent(
             model=self.model,
             tools=self.tools,
             prompt=self.prompt,
@@ -110,4 +115,40 @@ class ReactAgent(BaseAgent):
             name=self.name,
         )
         
+        self._agent = CreateReactAgentWrapper(_react_agent, 
+                                              name=self.name, 
+                                              before_invoke= self.invoke,
+                                              before_ainvoke= self.ainvoke,)
         return self._agent
+        
+    def invoke(self, state: Dict[str, Any]) -> Dict[str, Any]:
+        """同步调用入口 (真正的 Agent 执行逻辑)."""
+        print(f"[[DEBUG]] {self.name}.invoke() was called with state keys: {list(state.keys())}")
+        messages = state.get("messages", [])
+        if not messages:
+            print(f"[{self.name}] 暂无可打印消息。")
+        else:
+            # 遍历消息，找到最后一条 AI 消息
+            for msg in reversed(messages):
+                if isinstance(msg, AIMessage):  # 确认是 AIMessage 类型
+                    last_msg = msg
+                    last_msg.pretty_print()
+                    break
+            
+                if isinstance(msg, HumanMessage):
+                    last_msg = msg
+                    last_msg.pretty_print()
+                    break
+            else:
+                print(f"[{self.name}] 未找到 AI/Human Message 消息。")
+        
+        # 1) 上下文注入
+        state = self._inject_context(state)
+        return state
+
+    async def ainvoke(self, state: Dict[str, Any]) -> Dict[str, Any]:
+        """异步调用入口."""
+        print(f"[[DEBUG]] {self.name}.ainvoke() was called with state keys: {list(state.keys())}")
+        # 1) 上下文注入
+        state = await self._inject_context(state)
+        return state

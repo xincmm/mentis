@@ -189,13 +189,6 @@ class BaseAgent:
         # 重置_app，以便下次使用时重新构建
         self._agent = None
 
-    def get_runnable(self) -> RunnableCallable:
-        """
-        Wrap this agent as a RunnableCallable for LangGraph.
-        """
-        return RunnableCallable(self.invoke, self.ainvoke)
-
-
     def add_tools(self, tools: List[BaseTool]) -> None:
         """Add tools to the agent and update the prompt.
 

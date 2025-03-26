@@ -7,7 +7,7 @@ from langchain_openai import ChatOpenAI
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from dotenv import load_dotenv
 
-from core.agents.react_agent import ReactAgent
+from core.agents.base.react_agent import ReactAgent
 from core.tools.registry import get_registered_tools, ToolCategory, get_tools_by_category
 from core.tools.e2b_tool import E2BCodeInterpreterTool
 
@@ -127,29 +127,29 @@ react_agent = ReactAgent(
     ),
 )
 
-# 编译Agent
-agent = react_agent.compile()
+# # 编译Agent
+# agent = react_agent.compile()
 
-# 获取图对象
-graph = agent.get_graph()
+# # 获取图对象
+# graph = agent.get_graph()
 
-# 获取当前文件名（不含路径和扩展名）
-current_file = os.path.basename(__file__)
-file_name_without_ext = os.path.splitext(current_file)[0]
-graph_dir = os.path.join(os.path.dirname(__file__), "graphs")
+# # 获取当前文件名（不含路径和扩展名）
+# current_file = os.path.basename(__file__)
+# file_name_without_ext = os.path.splitext(current_file)[0]
+# graph_dir = os.path.join(os.path.dirname(__file__), "graphs")
 
-# 确保 graphs 目录存在
-os.makedirs(graph_dir, exist_ok=True)
+# # 确保 graphs 目录存在
+# os.makedirs(graph_dir, exist_ok=True)
 
-# 生成与文件名一致的图片名，并保存到 examples/graphs 目录
-image_data = graph.draw_mermaid_png()
-graph_path = os.path.join(graph_dir, f"{file_name_without_ext}.png")
+# # 生成与文件名一致的图片名，并保存到 examples/graphs 目录
+# image_data = graph.draw_mermaid_png()
+# graph_path = os.path.join(graph_dir, f"{file_name_without_ext}.png")
 
-# 保存图片（如果已存在则覆盖）
-with open(graph_path, "wb") as f:
-    f.write(image_data)
+# # 保存图片（如果已存在则覆盖）
+# with open(graph_path, "wb") as f:
+#     f.write(image_data)
 
-print(f"工作流图已保存为 {graph_path}")
+# print(f"工作流图已保存为 {graph_path}")
 
 ##############################################################################
 # 从沙箱下载文件到本地的函数
@@ -294,7 +294,7 @@ if __name__ == "__main__":
             HumanMessage(content="请生成一组模拟的公司财务数据（包括收入、支出、利润等），对数据进行分析，将处理过程（代码）和最终生成的结果保存到本地。")
         ]
     }
-    result = agent.invoke(inputs)
+    result = react_agent.run(inputs)
 
     for m in result["messages"]:
         m.pretty_print()

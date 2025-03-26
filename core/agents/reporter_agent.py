@@ -6,7 +6,7 @@ from langchain_core.tools import BaseTool
 from langchain_core.runnables import Runnable
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.store.base import BaseStore
-from core.agents.react_agent import ReactAgent, AgentState
+from core.agents.base.react_agent import ReactAgent, AgentState
 import re
 import json
 from datetime import datetime
@@ -128,18 +128,6 @@ Available tools:
         self.cache_enabled = cache_enabled
         self._report_sections = []  # Initialize report sections list
         self._iteration_count = 0  # Current iteration count
-
-    def add_tools(self, tools: List[BaseTool]) -> None:
-        """Add tools to the agent and update the prompt.
-
-        Args:
-            tools: A list of tools to add.
-        """
-        self.tools.extend(tools)
-        # Update tools list in prompt
-        tools_str = "\n".join([f"- {tool.name}: {tool.description}" for tool in self.tools])
-        if isinstance(self.prompt, str):
-            self.prompt = self._PROMPT_TEMPLATE.format(tools=tools_str)
 
     def add_report_section(self, title: str, content: str, sources: List[str]) -> None:
         """Add a section to the report.

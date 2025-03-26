@@ -5,7 +5,7 @@ from typing import Dict, Any
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
-from core.agents.react_agent import ReactAgent
+from core.agents.base.react_agent import ReactAgent
 from langchain_community.tools import TavilySearchResults
 from dotenv import load_dotenv
 load_dotenv()  # 自动加载 .env 文件

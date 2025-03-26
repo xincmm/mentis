@@ -9,7 +9,7 @@ from langchain_community.tools import JinaSearch, WikipediaQueryRun
 from langchain_community.utilities import WikipediaAPIWrapper
 from dotenv import load_dotenv
 
-from core.agents.react_agent import ReactAgent
+from core.agents.base.react_agent import ReactAgent
 from core.tools import register_direct_tool
 from core.tools.registry import get_registered_tools, ToolCategory
 from core.tools.firecrawl_tool import FireCrawlTool
@@ -71,13 +71,12 @@ print_separator("注册搜索工具")
 jina_search = JinaSearch()
 
 # 创建Wikipedia工具实例
-wiki_tool = WikipediaQueryRun(api_wrapper=WikipediaAPIWrapper())
+# wiki_tool = WikipediaQueryRun(api_wrapper=WikipediaAPIWrapper())
 
 firecrawl_tool = FireCrawlTool()
 
 # 使用register_direct_tool函数注册工具
 register_direct_tool(jina_search)
-register_direct_tool(wiki_tool)
 register_direct_tool(firecrawl_tool)
 # 注册自定义工具 - FireCrawlTool
 
@@ -111,9 +110,6 @@ react_agent = ReactAgent(
     prompt=(
         "你是一位专业的经济研究分析师，擅长分析复杂的经济问题并提供深入见解。\n"
         "你有多个强大的工具可以搜索网络获取实时信息：\n"
-        "- jina_search: 用于进行网络搜索获取最新信息\n"
-        "- wikipedia_query_run: 用于查询维基百科获取基础知识\n"
-        "- firecrawl_tool: 用于抓取和分析特定网页内容\n\n"
         "当面对复杂问题时，请遵循以下方法论：\n"
         "1. 分解问题：将复杂问题分解为更小的子问题\n"
         "2. 制定计划：确定需要搜索哪些信息，以及使用哪些工具\n"
@@ -121,18 +117,15 @@ react_agent = ReactAgent(
         "4. 分析结果：分析搜索结果，确定是否需要进一步搜索\n"
         "5. 综合信息：将所有搜索结果综合成一个连贯的回答\n\n"
         "重要提示：\n"
-        "- 对于基础概念和历史信息，优先使用wikipedia_query_run工具\n"
-        "- 对于最新动态和详细分析，使用jina_search工具\n"
-        "- 对于特定网站内容分析，使用firecrawl_tool工具\n"
         "- 每次搜索后评估结果，决定下一步行动\n"
         "- 在最终回答中引用来源\n"
         "- 清晰地展示你的思考过程，包括问题分解和计划制定\n"
     ),
 )
 
-agent = react_agent.compile()
+# agent = react_agent.compile()
 # 获取图对象
-graph = agent.get_graph()
+# graph = agent.get_graph()
 
 # # 获取当前文件名（不含路径和扩展名）
 # current_file = os.path.basename(__file__)
@@ -163,10 +156,10 @@ if __name__ == "__main__":
     # 定义输入
     inputs = {
         "messages": [
-            HumanMessage(content="请提供美联储(Federal Reserve)的详细介绍，包括其历史、结构、职能，以及它如何通过货币政策影响全球经济。")
+            HumanMessage(content="请提供2025年美联储(Federal Reserve)的详细介绍，包括其历史、结构、职能，以及它如何通过货币政策影响全球经济。")
         ]
     }
-    result = agent.invoke(inputs)
+    result = react_agent.run(inputs)
 ##############################################################################
 # 打印最终对话消息
 ##############################################################################

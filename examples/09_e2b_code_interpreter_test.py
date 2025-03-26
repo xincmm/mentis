@@ -7,7 +7,7 @@ from langchain_openai import ChatOpenAI
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from dotenv import load_dotenv
 
-from core.agents.react_agent import ReactAgent
+from core.agents.base.react_agent import ReactAgent
 from core.tools.registry import get_registered_tools, ToolCategory, get_tools_by_category
 from core.tools.e2b_tool import E2BCodeInterpreterTool
 
