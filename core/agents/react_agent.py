@@ -39,6 +39,9 @@ class ReactAgent(BaseAgent):
         debug: bool = False,
         version: Literal["v1", "v2"] = "v1",
         name: str = "react_agent",
+        max_context_messages: Optional[int] = None,
+        max_context_tokens: Optional[int] = None,
+        model_name: Optional[str] = "gpt-4o-mini",
     ):
         """Initialize a ReAct agent.
         
@@ -54,20 +57,31 @@ class ReactAgent(BaseAgent):
             debug: Whether to enable debug mode
             version: Version of the ReAct agent ("v1" or "v2")
             name: Name of the agent
+            max_context_messages: Optional limit on number of recent messages
+            max_context_tokens: Optional limit on total estimated tokens
+            model_name: Optional model name for token estimation
         """
-        self.model = model
-        self.tools = tools or []
-        self.prompt = prompt
+        # Call BaseAgent's __init__ to initialize parent class attributes
+        super().__init__(
+            name=name,
+            model=model,
+            tools=tools or [],
+            prompt=prompt,
+            checkpointer=checkpointer,
+            max_context_messages=max_context_messages,
+            max_context_tokens=max_context_tokens,
+            model_name=model_name
+        )
+        
+        # Initialize ReactAgent specific attributes
         self.response_format = response_format
         self.state_schema = state_schema
         self.config_schema = config_schema
-        self.checkpointer = checkpointer
         self.store = store
         self.interrupt_before = interrupt_before
         self.interrupt_after = interrupt_after
         self.debug = debug
         self.version = version
-        self.name = name
         self._agent = None
     
     def compile(self) -> CompiledGraph:
@@ -97,22 +111,3 @@ class ReactAgent(BaseAgent):
         )
         
         return self._agent
-    
-    def stream(self, state: Dict[str, Any], **kwargs) -> Any:
-        """Stream the ReAct agent execution with the given state.
-        
-        This method allows monitoring the intermediate states during execution,
-        which is useful for tracking the agent's reasoning process and tool calls.
-        
-        Args:
-            state: Current state of the conversation
-            **kwargs: Additional arguments to pass to the stream method
-            
-        Returns:
-            Iterator over intermediate states
-        """
-        # 确保应用已编译
-        if self._agent is None:
-            self.compile()
-        
-        return self._agent.stream(state, **kwargs)

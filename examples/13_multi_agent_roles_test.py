@@ -65,7 +65,6 @@ coder_agent = CoderAgent(
     tools=[e2b_tool],
     max_iterations=5,
     cache_enabled=True,
-    debug=True
 )
 
 ##############################################################################
@@ -77,7 +76,6 @@ reporter_agent = ReporterAgent(
     model=model,
     max_iterations=5,
     cache_enabled=True,
-    debug=True
 )
 
 ##############################################################################
@@ -89,7 +87,6 @@ designer_agent = DesignerAgent(
     model=model,
     max_iterations=5,
     cache_enabled=True,
-    debug=True
 )
 
 ##############################################################################
@@ -101,7 +98,6 @@ data_analyst_agent = DataAnalystAgent(
     model=model,
     max_iterations=5,
     cache_enabled=True,
-    debug=True
 )
 
 ##############################################################################
@@ -118,31 +114,14 @@ supervisor = SupervisorAgent(
         data_analyst_agent,
     ],
     model=model,
-    enable_planning=True,  # 启用Planning功能
-)
-
-app = supervisor.compile()
+enable_planning=True)
 
 # 获取当前文件名（不含路径和扩展名）
 current_file = os.path.basename(__file__)
 file_name_without_ext = os.path.splitext(current_file)[0]
-graph_dir = os.path.join(os.path.dirname(__file__), "graphs")
 logs_dir = os.path.join(os.path.dirname(__file__), "logs")
-
-# 确保 graphs 和 logs 目录存在
-os.makedirs(graph_dir, exist_ok=True)
+# 创建图表输出文件路径
 os.makedirs(logs_dir, exist_ok=True)
-
-# 生成与文件名一致的图片名，并保存到 examples/graphs 目录
-image_data = app.get_graph().draw_mermaid_png()
-graph_path = os.path.join(graph_dir, f"{file_name_without_ext}.png")
-
-# 保存图片（如果已存在则覆盖）
-with open(graph_path, "wb") as f:
-    f.write(image_data)
-
-print(f"Image saved as {graph_path}")
-
 # 创建Markdown输出文件路径
 markdown_path = os.path.join(logs_dir, f"{file_name_without_ext}.md")
 
@@ -155,7 +134,6 @@ def save_markdown_log():
     with open(markdown_path, "w", encoding="utf-8") as f:
         f.write(f"# 执行结果: {file_name_without_ext}\n\n")
         f.write("## 图表\n\n")
-        f.write(f"![执行流程图]({os.path.relpath(graph_path, logs_dir)})\n\n")
         f.write("## 执行日志\n\n")
         f.write("```\n")
         f.write(log_capture.get_content())
@@ -172,13 +150,14 @@ if __name__ == "__main__":
             
             # 测试1：需要研究和编码的任务
             print("\n## 测试1：需要研究和编码的任务")
-            result1 = app.invoke({
+            result1 = supervisor.run({
                 "messages": [
                     {
                         "role": "user",
                         "content": (
                             "我需要一个简单的Python爬虫来获取最新的科技新闻，并将结果保存为CSV文件。"
-                            "请先研究一下如何实现，然后提供代码，代码要进行完成的可用性测试，最后生成一份报告总结这个解决方案。"
+                            "请提供完整的代码，并确保代码能够正常运行。"
+                            "最后，讲个笑话来缓解一下压力。"
                         )
                     }
                 ]

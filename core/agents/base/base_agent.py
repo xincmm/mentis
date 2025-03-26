@@ -13,11 +13,16 @@ logger = logging.getLogger(__name__)
 
 # === BaseAgent ===
 class BaseAgent:
+    _PROMPT_TEMPLATE = """
+    You have access to the following tools:
+    {tools}
+    Use the above tools to answer the question at the end.
+    """
     def __init__(
         self,
         name: str,
         model: Union[BaseChatModel, LanguageModelLike],
-        tools: Optional[List[BaseTool]] = None,
+        tools: Optional[List[Union[BaseTool, Callable]]] = None,
         prompt: Optional[Union[str, SystemMessage, Callable]] = None,
         checkpointer: Optional[Checkpointer] = None,
         max_context_messages: Optional[int] = None,  # Limit number of recent messages
@@ -139,6 +144,37 @@ class BaseAgent:
         state = self._inject_context(state)
         
         return await self._agent.ainvoke(state)
+    
+
+    def run(self, state: Dict[str, Any]) -> Dict[str, Any]:
+        """Run the supervisor workflow synchronously.
+
+        Args:
+            state: The input state for the workflow
+
+        Returns:
+            The output state from the workflow
+        """
+        if self._agent is None:
+            self.compile()
+
+        # Apply context injection from BaseAgent
+        init_state = self.invoke(state)
+
+        return self._agent.invoke(init_state)
+    
+    async def arun(self, state: Dict[str, Any]) -> Dict[str, Any]:
+        """Run the supervisor workflow asynchronously.
+        Args:
+            state: The input state for the workflow
+        Returns:
+            The output state from the workflow
+        """
+        if self._agent is None:
+            self.compile()
+        # Apply context injection from BaseAgent
+        init_state = await self.ainvoke(state)
+        return await self._agent.ainvoke(init_state)
 
     def reset(self):
         """Reset the agent's state.
@@ -158,3 +194,16 @@ class BaseAgent:
         Wrap this agent as a RunnableCallable for LangGraph.
         """
         return RunnableCallable(self.invoke, self.ainvoke)
+
+
+    def add_tools(self, tools: List[BaseTool]) -> None:
+        """Add tools to the agent and update the prompt.
+
+        Args:
+            tools: A list of tools to add.
+        """
+        self.tools.extend(tools)
+        # Update tools list in prompt
+        tools_str = "\n".join([f"- {tool.name}: {tool.description}" for tool in self.tools])
+        if isinstance(self.prompt, str):
+            self.prompt = self._PROMPT_TEMPLATE.format(tools=tools_str)

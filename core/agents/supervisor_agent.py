@@ -4,14 +4,16 @@ import re
 from langchain_core.language_models import LanguageModelLike
 from langchain_core.tools import BaseTool
 from langgraph.graph import StateGraph
+from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import Checkpointer
 from langgraph.prebuilt.chat_agent_executor import (
     AgentState,
     StateSchemaType,
 )
 from core.agents.supervisor import create_supervisor
+from core.agents.supervisor.simple_planning_tool import SimplePlanningTool
 from core.agents.base.base_agent import BaseAgent
-from core.tools.todolist_tool import TodolistTool
+from core.agents.supervisor.state_schema import PlanningAgentState
 import logging
 
 logger = logging.getLogger(__name__)
@@ -21,70 +23,13 @@ class SupervisorAgent(BaseAgent):
     
     This class provides a high-level interface for creating a supervisor workflow
     that can manage and coordinate multiple agents. It also includes planning capabilities
-    to create and manage a todolist for complex tasks.
-    """
+    to create and manage a plan for complex tasks using a state-driven approach.
     
-    _PLANNING_PROMPT_TEMPLATE = """You are a Planning Supervisor Agent. Your job is to analyze user requests, create a clear todolist, and coordinate multiple agents to complete tasks.
-
-## Task Approach Methodology
-
-### Understanding Requirements
-- Analyzing user requests to identify core needs
-- Asking clarifying questions when requirements are ambiguous
-- Breaking down complex requests into manageable components
-- Identifying potential challenges before beginning work
-
-### Planning
-- Creating a structured todolist for task completion
-- Identifying appropriate tools or agents for each subtask
-- Coordinating the execution of the plan
-- Tracking progress and updating the todolist as tasks are completed
-
-## Todolist Tool Usage Guide
-
-You have access to a todolist tool that can help you manage tasks. Here's how to use it:
-
-1. **Create a todolist**:
-   - Use `todolist("create", plan_content="Your detailed plan here")` 
-   - The plan_content MUST be formatted as a Markdown todolist with each task on a new line
-   - Example: `todolist("create", plan_content="- [ ] Research topic\n- [ ] Write outline\n- [ ] Draft content")`
-   - Alternatively, you can use a numbered list format: `todolist("create", plan_content="1. Research topic\n2. Write outline\n3. Draft content")`
-
-2. **View the current todolist**:
-   - Use `todolist("view")` to see all current tasks and their status
-
-3. **Add a new task**:
-   - Use `todolist("add task", task_description="Description of the new task")`
-   - Example: `todolist("add task", task_description="Review final draft")`
-
-4. **Update task status**:
-   - By index: `todolist("update_by_index", task_index=0, completed=True)` (indexes start at 0)
-   - By description: `todolist("update_by_description", task_description="Research topic", completed=True)`
-
-## Working with Complex Requests
-
-1. FIRST, carefully analyze the user's request and break it down into clear, actionable tasks
-2. Create a COMPLETE todolist using the todolist tool with ALL anticipated tasks before starting execution
-3. Execute the plan step by step, addressing tasks sequentially
-4. Update the todolist as tasks are completed
-5. Provide a final summary when all tasks are done
-
-## IMPORTANT: Planning Guidelines
-
-- Always create a comprehensive todolist BEFORE beginning execution
-- Your initial plan should include ALL foreseeable tasks needed to complete the request
-- Include a brief restatement of the user's request at the beginning of your plan
-- Create clear, specific, and actionable tasks in your todolist
-- Only add new tasks during execution if absolutely necessary for unexpected requirements
-- Mark tasks as 'done' only when fully completed
-- Update the todolist before proceeding to the next task
-- When creating a todolist, provide detailed task descriptions (at least 15 characters per task)
-- Ensure each task is specific and actionable
-
-Remember: A well-structured todolist is essential for successful task completion. Take time to create a thorough plan before beginning execution.
-"""
-
-    _BASE_PROMPT_TEMPLATE = """You are a Supervisor Agent. Your job is to analyze user requests and coordinate multiple agents to complete tasks.
+    The planning functionality is implemented using PlanningStateHandler and PlanningTool,
+    which provide a more structured and flexible way to manage tasks compared to the
+    previous TodolistTool approach.
+    """
+    _PROMPT_TEMPLATE = """You are a Supervisor Agent. Your job is to analyze user requests and coordinate multiple agents to complete tasks.
 
 ## Task Approach Methodology
 
@@ -95,7 +40,7 @@ Remember: A well-structured todolist is essential for successful task completion
 - Identifying potential challenges before beginning work
 
 ### Coordination
-- Identifying appropriate agents for each subtask
+- Identifying appropriate agents for each task
 - Delegating tasks to specialized agents
 - Tracking progress and ensuring task completion
 - Synthesizing information from multiple agents
@@ -112,8 +57,95 @@ Remember: A well-structured todolist is essential for successful task completion
 8. Provide a final summary when all tasks are done
 
 Remember: Effective coordination is essential for successful task completion. Take time to understand the request and delegate appropriately.
+ {tools}
 """
 
+    _PLANNING_PROMPT_TEMPLATE = """You are a Supervisor agent. Your role is to analyze user requests, break them down into actionable tasks, and coordinate specialized agents (e.g., research_expert, coder_expert, reporter_expert) to complete them.
+
+# Task Coordination Rules
+1. Understand the user's request and break it down into steps if necessary.
+2. Assign each step to the most appropriate agent. Call the relevant handoff tool to transfer control to that agent.
+3. Wait for the agent's response before proceeding to the next step.
+4. Maintain a single plan if needed, and do not recreate it unless no plan exists.
+
+# Communication
+- Provide clear instructions and outputs to the user.
+- Use your specialized agents to handle sub-problems one at a time.
+- Return a final answer that addresses the original user request.
+"""
+
+    _PLANNING_TOOL_TEMPLATE = """
+# Planning Tool Instructions
+You have access to a "planning" tool that uses JSON for all operations. Do NOT include any "state" field in your calls. Use the following actions exactly as defined:
+
+1. "create_plan": Create a new plan.
+   - Required fields:
+     - title (string)
+     - description (string)
+     - tasks (list of task objects). Each task object must include:
+         "description": string,
+         "status": "pending" (all tasks must have "status": "pending" initially),
+         "agent": string (empty if not assigned),
+         "notes": string (empty if none),
+         "evaluation": string (empty if none)
+   - Example:
+   {
+     "action": "create_plan",
+     "title": "Python Scraper for Tech News",
+     "description": "Build a Python scraper to fetch the latest tech news and save it as CSV",
+     "tasks": [
+       {"description": "Research Python scraping libraries", "status": "pending", "agent": "", "notes": "", "evaluation": ""},
+       {"description": "Implement the scraper", "status": "pending", "agent": "", "notes": "", "evaluation": ""},
+       {"description": "Test the code", "status": "pending", "agent": "", "notes": "", "evaluation": ""}
+     ]
+   }
+
+2. "view_plan": Retrieve the current plan.
+   - Example:
+   {
+     "action": "view_plan"
+   }
+
+3. "add_tasks": Add additional tasks to the plan.
+   - Required:
+     - tasks: list of task objects (same format as above)
+   - Example:
+   {
+     "action": "add_tasks",
+     "tasks": [
+       {"description": "Write documentation", "status": "pending", "agent": "", "notes": "", "evaluation": ""}
+     ]
+   }
+
+4. "update_task": Update an existing task.
+   - Identify the task by "by_id" (the task's unique ID from the plan).
+   - You may update any of: "description", "status", "agent", "notes", "evaluation".
+   - Example:
+   {
+     "action": "update_task",
+     "by_id": "TASK-UUID",
+     "status": "completed",
+     "evaluation": "The scraper works perfectly."
+   }
+
+5. "set_current_task": Set the current task by its ID.
+   - Example:
+   {
+     "action": "set_current_task",
+     "task_id": "TASK-UUID"
+   }
+
+6. "finish_plan": Mark the entire plan as completed.
+   - Example:
+   {
+     "action": "finish_plan"
+   }
+
+Important:
+- Always produce valid JSON for your tool calls.
+- Continuously update and monitor the plan until every task's status is "completed" before delivering your final answer.
+- If the plan is not fully completed, do not stop; keep updating the plan with appropriate calls.
+"""
     def __init__(
         self,
         agents: List[BaseAgent],
@@ -124,7 +156,7 @@ Remember: Effective coordination is essential for successful task completion. Ta
         supervisor_name: str = "supervisor",
         checkpointer: Optional[Checkpointer] = None,
         output_mode: str = "last_message", # * full_history or last_message *
-        enable_planning: bool = False,
+        enable_planning: bool = True, # * True or False *
     ):
         """Initialize a supervisor.
         
@@ -138,20 +170,15 @@ Remember: Effective coordination is essential for successful task completion. Ta
             checkpointer: Optional checkpointer to use for the supervisor
             output_mode: Mode for adding agent outputs to the message history
                 ("full_history" or "last_message")
-            enable_planning: Whether to enable planning capabilities with todolist
+            enable_planning: Whether to enable planning capabilities
+            auto_planning: Whether to automatically generate plans for complex tasks
         """
-        # Create todolist tool if planning is enabled
+        # 设置规划相关属性
         self._enable_planning = enable_planning
-        self._todolist_tool = TodolistTool() if enable_planning else None
         
-        # Add todolist tool to the tools list if planning is enabled
-        if enable_planning and tools is not None:
-            tools = tools + [self._todolist_tool]
-        elif enable_planning:
-            tools = [self._todolist_tool]
-        
-        # Determine the base prompt based on planning mode
-        base_prompt = self._PLANNING_PROMPT_TEMPLATE if enable_planning else self._BASE_PROMPT_TEMPLATE
+        # 如果启用规划功能，设置状态模式为PlanningAgentState
+        if self._enable_planning and state_schema == AgentState:
+            state_schema = PlanningAgentState
             
         # Store agent-specific attributes before super().__init__
         self.agents = agents
@@ -159,20 +186,21 @@ Remember: Effective coordination is essential for successful task completion. Ta
         self.supervisor_name = supervisor_name
         self.state_schema = state_schema
         self.checkpointer = checkpointer
+        self.tools = tools or []
         self._workflow = None
         self._agent = None
+            
+        # 生成基础提示词
+        # _agents_prompt = self._generate_agents_prompt()
+        _final_prompt = self._PLANNING_PROMPT_TEMPLATE + "/n/n" + self._PLANNING_TOOL_TEMPLATE if self._enable_planning else self._PROMPT_TEMPLATE
         
-        # Generate final prompt
-        _final_prompt = base_prompt
-        if prompt is None:
-            # Generate prompt based on available agents
-            _agents_prompt = self._generate_agents_prompt()
-            _final_prompt = base_prompt + _agents_prompt
-        else:
-            # Append custom prompt to default template
-            _final_prompt = base_prompt + "\n\n" + prompt
+        if tools is None:
+            tools = []
+        # 如果启用规划功能，添加规划提示模板并添加规划工具
+        if self._enable_planning:
+            tools.append(SimplePlanningTool())
         
-        # Initialize the BaseAgent parent class
+        # 初始化BaseAgent父类
         super().__init__(
             name=supervisor_name,
             model=model,
@@ -216,7 +244,10 @@ Remember: Effective coordination is essential for successful task completion. Ta
         
         return self._workflow
 
-        
+    def compile(self) -> CompiledStateGraph:
+        return super().compile()
+    
+   
     def _generate_agents_prompt(self) -> str:
         """Generate a prompt based on the types of agents provided.
         
@@ -245,23 +276,22 @@ Remember: Effective coordination is essential for successful task completion. Ta
                 
             agent_descriptions.append(f"- **{agent_name}**: {agent_desc}")
         
-        agent_descriptions.append("\n## Agent Selection Guidelines\n")
-        agent_descriptions.append("When deciding which agent to use for a task:\n")
-        agent_descriptions.append("1. Consider the primary nature of the task (research, coding, reporting, design, data analysis, etc.)")
-        agent_descriptions.append("2. For complex tasks, break them down and assign different components to appropriate agents")
-        agent_descriptions.append("3. Ensure clear handoffs between agents when multiple agents are needed")
-        agent_descriptions.append("4. Synthesize outputs from multiple agents into a coherent response")
-        
-        agent_descriptions.append("\n## Handoff Guidelines\n")
-        agent_descriptions.append("When transferring tasks between agents:\n")
-        agent_descriptions.append("1. Provide clear and specific instructions about what you need the agent to accomplish")
-        agent_descriptions.append("2. Include all necessary context and background information in your handoff")
-        agent_descriptions.append("3. Specify the expected output format or deliverables you need from the agent")
-        agent_descriptions.append("4. Use handoffs only when the task clearly aligns with a specialized agent's capabilities")
-        agent_descriptions.append("5. ALWAYS wait for the agent to COMPLETELY finish their current task before proceeding")
-        agent_descriptions.append("6. NEVER delegate tasks to multiple agents simultaneously")
-        agent_descriptions.append("7. When an agent returns control to you, thoroughly review their output before proceeding")
-        agent_descriptions.append("8. Confirm task completion before moving to the next task or agent")
-        agent_descriptions.append("9. For multi-step processes, maintain a strict sequential order of handoffs with proper context preservation")
+        # agent_descriptions.append("\n## Agent Selection Guidelines\n")
+        # agent_descriptions.append("When deciding which agent to use for a task:\n")
+        # agent_descriptions.append("1. Consider the primary nature of the task (research, coding, reporting, design, data analysis, etc.)")
+        # agent_descriptions.append("2. For complex tasks, break them down and assign different components to appropriate agents")
+        # agent_descriptions.append("3. Ensure clear handoffs between agents when multiple agents are needed")
+        # agent_descriptions.append("4. Synthesize outputs from multiple agents into a coherent response")
+        # agent_descriptions.append("\n## Handoff Guidelines\n")
+        # agent_descriptions.append("When transferring tasks between agents:\n")
+        # agent_descriptions.append("1. Provide clear and specific instructions about what you need the agent to accomplish")
+        # agent_descriptions.append("2. Include all necessary context and background information in your handoff")
+        # agent_descriptions.append("3. Specify the expected output format or deliverables you need from the agent")
+        # agent_descriptions.append("4. Use handoffs only when the task clearly aligns with a specialized agent's capabilities")
+        # agent_descriptions.append("5. ALWAYS wait for the agent to COMPLETELY finish their current task before proceeding")
+        # agent_descriptions.append("6. NEVER delegate tasks to multiple agents simultaneously")
+        # agent_descriptions.append("7. When an agent returns control to you, thoroughly review their output before proceeding")
+        # agent_descriptions.append("8. Confirm task completion before moving to the next task or agent")
+        # agent_descriptions.append("9. For multi-step processes, maintain a strict sequential order of handoffs with proper context preservation")
         
         return "\n".join(agent_descriptions)

@@ -1,5 +1,5 @@
 import inspect
-from typing import Any, Callable, Literal, Optional, Type, Union
+from typing import Any, Callable, Literal, Optional, Type, Union, Dict, Optional
 
 from langchain_core.language_models import BaseChatModel, LanguageModelLike
 from langchain_core.tools import BaseTool
@@ -13,7 +13,7 @@ from langgraph.prebuilt.chat_agent_executor import (
 )
 from langgraph.pregel import Pregel
 from langgraph.utils.runnable import RunnableCallable
-
+from core.agents.base.create_react_agent_wrapper import CreateReactAgentWrapper
 from core.agents.supervisor.agent_name import AgentNameMode, with_agent_name
 from core.agents.supervisor.handoff import (
     create_handoff_back_messages,
@@ -79,11 +79,15 @@ def _make_call_agent(
         }
 
     def call_agent(state: dict) -> dict:
+        print(f"🟡 [Sync invoke] Handoff to agent '{agent.name}' with state keys: {list(state.keys())}")
         output = agent.invoke(state)
+        print(f"✅ [Sync invoke] Agent '{agent.name}' completed.")
         return _process_output(output)
 
     async def acall_agent(state: dict) -> dict:
+        print(f"🟡 [Async invoke] Handoff to agent '{agent.name}' with state keys: {list(state.keys())}")
         output = await agent.ainvoke(state)
+        print(f"✅ [Async invoke] Agent '{agent.name}' completed.")
         return _process_output(output)
 
     return RunnableCallable(call_agent, acall_agent)
@@ -186,6 +190,37 @@ def create_supervisor(
         response_format=response_format,
     )
 
+    def print_supervisor_last_msg(state: Dict[str, Any], output: Optional[Dict[str, Any]] = None) -> None:
+        """
+        尝试打印 Supervisor 最后一条消息。
+        1. 如果 `output` 存在且其中有 `message` 字段，优先打印该字段。
+        2. 否则从 `state["messages"]` 中找最后一条消息并打印：
+        - 如果它是 AIMessage 并且没有 tool_calls，就调用 pretty_print()
+        - 如果不是，则直接把消息内容打印。
+        """
+
+        # 1. 如果 output 有 "message" 字段，优先使用
+        if output is not None:
+            last_message_text = output.get("message")
+            if last_message_text:
+                print(f"[Supervisor] 最后一条消息（来自 output）: {last_message_text}")
+                return
+
+        # 2. 否则尝试从 state["messages"] 中获取最后一条
+        messages = state.get("messages", [])
+        if not messages:
+            print("[Supervisor] 暂无可打印消息。")
+            return
+
+        # 取出最后一条
+        last_msg = messages[-1]
+        last_msg.pretty_print()
+                
+    supervisor_agent = CreateReactAgentWrapper(supervisor_agent, 
+                                               name="supervisor", 
+                                               before_invoke=print_supervisor_last_msg, 
+                                               after_invoke=print_supervisor_last_msg)
+    # Build the multi-agent supervisor graph using the langgraph StateGraph setup
     builder = StateGraph(state_schema, config_schema=config_schema)
     builder.add_node(supervisor_agent, destinations=tuple(agent_names) + (END,))
     builder.add_edge(START, supervisor_agent.name)
