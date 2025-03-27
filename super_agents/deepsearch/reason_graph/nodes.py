@@ -18,7 +18,7 @@ from reason_graph.schemas import ( # Relative import
     StepInfo,
     ResearchPlan
 )
-from .tools import ( # Relative import
+from reason_graph.tools import ( # Relative import
     llm, 
     llm_creative, 
     generate_structured_output, 
@@ -27,6 +27,7 @@ from .tools import ( # Relative import
     perform_x_search, 
     add_stream_update
 )
+from reason_graph.prompt import FINAL_REPORT_SYSTEM_PROMPT_TEMPLATE 
 # --- Node Functions ---
 
 async def plan_research(state: ResearchState) -> Dict[str, Any]:
@@ -683,162 +684,198 @@ def finalize_basic_research(state: ResearchState) -> Dict[str, Any]:
     })
     return {"stream_updates": final_progress_update}
 
-# --- New Node for Final Report Generation ---
+# --- generate_final_markdown_report 函数 ---
 
 async def generate_final_markdown_report(state: ResearchState) -> Dict[str, Any]:
     """Generates the final, long-form Markdown report using all gathered data."""
-    
+
     print("--- Entering Node: generate_final_markdown_report ---")
-    
+
+    # --- 获取状态数据 ---
     topic = state['topic']
     final_synthesis = state.get('final_synthesis')
-    search_results = state.get('search_results', []) # Get all search results collected
-    gap_analysis = state.get('gap_analysis') # Get gap analysis results
-    
+    search_results = state.get('search_results', [])
+    gap_analysis = state.get('gap_analysis')
+
+    # --- 检查是否有 Synthesis 数据 ---
     if not final_synthesis:
         print("Skipping final report generation: Final synthesis data is missing.")
-        # Potentially return an empty dict or an update indicating skip
-        return {"final_report_markdown": None} 
+        skipped_update = add_stream_update(state, {
+            'id': 'final-report-generation', 'type': 'report', 'status': 'completed',
+            'title': 'Final Report Generation Skipped',
+            'message': 'Skipped report generation because final synthesis data was missing.',
+            'overwrite': True, 'timestamp': time.time()
+        })
+        base_total_steps = state.get('total_steps', 0)
+        final_total_steps = base_total_steps # 没有增加步骤
+        final_completed_steps = state.get('completed_steps_count', 0)
+        final_progress_update = add_stream_update(state, {
+             'id': 'research-progress', 'type': 'progress', 'status': 'completed',
+             'title': 'Research Progress', 'message': 'Research finished, synthesis missing, report skipped.',
+             'completedSteps': final_completed_steps, 'totalSteps': final_total_steps,
+             'isComplete': True, 'overwrite': True, 'timestamp': time.time()
+        })
+        return {"final_report_markdown": None, "stream_updates": skipped_update + final_progress_update}
 
-    # Send running update
+    # --- 发送运行中 Update ---
     running_updates = add_stream_update(state, {
         'id': 'final-report-generation',
         'type': 'report',
         'status': 'running',
         'title': 'Generating Final Report',
         'message': 'Compiling research findings into the final report...',
+        'timestamp': time.time() # 添加时间戳
     })
-    
-    # --- Construct Prompts ---
+    all_updates = list(running_updates) # 初始化 updates 列表
 
-    # System Prompt (Adapted from your JS example)
-    system_prompt = f"""You are an advanced research assistant focused on deep analysis and comprehensive understanding with focus to be backed by citations in a research paper format.
-Your objective is to write the final research report based *only* on the provided context (search results, synthesis, gap analysis).
-The current date is {datetime.now().strftime("%a, %b %d, %Y")}.
-
-Extremely important:
-- You MUST use the provided context (search results, findings) to generate the report and citations. Do NOT Hallucinate information or sources.
-- Place citations directly after relevant sentences or paragraphs using the format [Source Title](URL) based on the provided search results context.
-- Citations should be where the information is referred to, not at the end.
-- Citations are a MUST for factual claims.
-- Give proper headings (H2, H3) to the response. Do NOT use H1.
-
-Latex Math Support (Use if relevant to the topic):
-- Use $ for inline equations
-- Use $$ for block equations
-- Use "USD" for currency (not $)
-
-Guidelines:
-- Provide an extremely comprehensive, well-structured response in Markdown format. Use tables if helpful.
-- Use the provided search results context for content and citations ([Title](URL)). Include academic, web, and potentially X/Twitter findings if present in the context.
-- Focus on analysis and synthesis of information found in the context.
-- Use proper citations and evidence-based reasoning based *only* on the provided context.
-- The response should be in paragraphs, not just bullet points (though bullet points can be used within paragraphs or for lists where appropriate).
-- Make the response as long as possible by elaborating on the provided findings and evidence, aiming for multiple detailed paragraphs per section (e.g., 2-4 paragraphs). Do not skip important details present in the context.
-- CITATIONS SHOULD BE ON EVERYTHING FACTUAL YOU STATE, referencing the provided context.
-- Include analysis of reliability and limitations if mentioned in the gap analysis context.
-- In the response avoid referencing the citation directly by number/index; embed the [Title](URL) link.
-
-Response Format:
-- Start with an introduction section.
-- Create multiple thematic sections with H2 headings based on the key findings and topic.
-- Use H3 subheadings within sections if needed.
-- Each section should contain detailed paragraphs elaborating on the findings, supported by inline citations from the provided search results context.
-- End with a conclusion section summarizing the key takeaways and potentially mentioning the remaining uncertainties provided.
-- Keep it super detailed and long, leveraging the provided context fully.
-"""
-
-    # User Prompt - Provide the context
-    # We need to format the context effectively. Passing all raw results might be too much.
-    # Let's pass the synthesis, gap analysis summary, and maybe summaries/titles/URLs of search results.
-
-    # Prepare context string (simplified example - adjust as needed based on token limits)
+    # --- 构建详细上下文 (只构建一次) ---
+    print("--- Building Context for Final Report ---")
     context_parts = []
     context_parts.append(f"## Research Topic:\n{topic}\n")
-    
-    context_parts.append("## Synthesized Key Findings (Use these as the core for your report):\n")
-    for i, finding in enumerate(final_synthesis.key_findings):
-        context_parts.append(f"### Finding {i+1}: {finding.finding}")
-        context_parts.append(f"Confidence: {finding.confidence:.2f}")
-        context_parts.append("Supporting Evidence Hints (Expand on these using Search Results Context):")
-        for ev in finding.supporting_evidence:
-            context_parts.append(f"- {ev}") # Evidence hints might be URLs or titles from original results
-        context_parts.append("")
 
-    context_parts.append("## Remaining Uncertainties:\n")
-    for uncertainty in final_synthesis.remaining_uncertainties:
-        context_parts.append(f"- {uncertainty}")
-    context_parts.append("")
-    
+    # 1. 添加 Final Synthesis 结果
+    context_parts.append("## I. Synthesized Key Findings & Uncertainties (Core Content)\n")
+    context_parts.append("### Key Findings (Elaborate on these using evidence below):\n")
+    if final_synthesis.key_findings:
+        for i, finding in enumerate(final_synthesis.key_findings):
+            context_parts.append(f"**Finding {i+1}: {finding.finding}**")
+            context_parts.append(f"   - Confidence: {finding.confidence:.2f}")
+            context_parts.append(f"   - Evidence Hints: {', '.join(finding.supporting_evidence)}")
+            context_parts.append("")
+    else:
+        context_parts.append("- No key findings were synthesized.\n")
+
+    context_parts.append("### Remaining Uncertainties (Address in conclusion or limitations):\n")
+    if final_synthesis.remaining_uncertainties:
+        for uncertainty in final_synthesis.remaining_uncertainties:
+            context_parts.append(f"- {uncertainty}")
+    else:
+        context_parts.append("- No specific remaining uncertainties identified.\n")
+    context_parts.append("\n")
+
+    # 2. 添加 Gap Analysis 结果
     if gap_analysis:
-         context_parts.append("## Gap Analysis Summary (Consider for limitations section):\n")
-         context_parts.append("### Limitations:")
-         for limit in gap_analysis.limitations:
-              context_parts.append(f"- {limit.description} (Severity: {limit.severity})")
-         context_parts.append("### Knowledge Gaps:")
-         for gap in gap_analysis.knowledge_gaps:
-              context_parts.append(f"- {gap.topic}: {gap.reason}")
-         context_parts.append("")
-
-    # Include Search Results Context (Crucial for Citations)
-    # Option: Include all titles/URLs. Option: Include summaries if available. Be mindful of token limits.
-    context_parts.append("## Search Results Context (Use for content details and citations [Title](URL)):\n")
-    for result_group in search_results:
-         context_parts.append(f"### Results for Query: \"{result_group.query.query}\" (Source Type: {result_group.type})")
-         if result_group.results:
-              for item in result_group.results[:5]: # Limit to top 5 per query for context size
-                    title = item.title.replace('"',"'") # Basic cleaning
-                    url = item.url
-                    content_snippet = item.content[:200].replace('\n', ' ') + "..." # Limit snippet length
-                    context_parts.append(f"- **[{title}]({url})**: {content_snippet}")
+         context_parts.append("## II. Gap Analysis Summary (For 'Scope and Limitations' section):\n")
+         if gap_analysis.limitations:
+              context_parts.append("### Identified Limitations:\n")
+              for limit in gap_analysis.limitations:
+                   context_parts.append(f"- **{limit.type}**: {limit.description} (Severity: {limit.severity})")
+                   if limit.potential_solutions:
+                        context_parts.append(f"  - Potential Solutions: {'; '.join(limit.potential_solutions)}")
          else:
-              context_parts.append("- No results found.")
-         context_parts.append("")
-         
+             context_parts.append("- No specific limitations identified.\n")
+
+         if gap_analysis.knowledge_gaps:
+              context_parts.append("### Identified Knowledge Gaps:\n")
+              for gap in gap_analysis.knowledge_gaps:
+                   context_parts.append(f"- **{gap.topic}**: {gap.reason}")
+         else:
+             context_parts.append("- No specific knowledge gaps identified.\n")
+         context_parts.append("\n")
+    else:
+        context_parts.append("## II. Gap Analysis Summary:\n- Gap analysis was not performed or yielded no results.\n")
+
+    # 3. 添加详细的 Search Results Context
+    context_parts.append("## III. Search Results Context (Evidence for Citations [Title](URL) and Details):\n")
+    search_results_list = state.get('search_results', [])
+    total_results_count = sum(len(group.results) for group in search_results_list)
+    context_parts.append(f"(Reference Appendix: Contains snippets from {total_results_count} collected results)\n")
+
+    processed_urls: Set[str] = set()
+    max_results_per_query_in_context = 5
+    max_content_length = 600
+
+    if search_results_list:
+        for result_group in search_results_list:
+             query_text = result_group.query.query
+             source_type = result_group.type
+             context_parts.append(f"### Context for Query: \"{query_text}\" ({source_type.upper()})\n")
+
+             results_shown_count = 0
+             if result_group.results:
+                  for item in result_group.results:
+                        if results_shown_count >= max_results_per_query_in_context:
+                             break
+                        if not item.url or item.url in processed_urls:
+                             continue
+
+                        title = item.title.replace('"',"'").strip() if item.title else "Source"
+                        url = item.url
+
+                        content_full = item.content if item.content else ""
+                        content_snippet = content_full[:max_content_length]
+                        if len(content_full) > max_content_length:
+                             last_period = content_snippet.rfind('.')
+                             if last_period > max_content_length * 0.7:
+                                  content_snippet = content_snippet[:last_period+1]
+                             else:
+                                  content_snippet += "..."
+                        content_snippet = content_snippet.replace('\n', ' ').strip()
+
+                        context_parts.append(f"- **[{title}]({url})**")
+                        if content_snippet:
+                            context_parts.append(f"  - Snippet: {content_snippet}")
+
+                        processed_urls.add(url)
+                        results_shown_count += 1
+             else:
+                  context_parts.append("- (No relevant results found or processed for this query)")
+             context_parts.append("")
+    else:
+        context_parts.append("- No search results were collected.\n")
+
     user_prompt_context = "\n".join(context_parts)
-    
-    # Combine context with instruction
-    user_prompt = f"""Based *only* on the provided context below, please generate the comprehensive research report following all the guidelines in the system prompt. Ensure every factual claim is supported by an inline citation [Title](URL) derived from the 'Search Results Context' section.
+    # --- 上下文构建结束 ---
+
+    # --- 定义 Prompts ---
+    try:
+        current_date_str = datetime.now().strftime("%a, %b %d, %Y")
+        # 从 prompt.py 导入模板并格式化
+        system_prompt = FINAL_REPORT_SYSTEM_PROMPT_TEMPLATE.format(current_date=current_date_str)
+    except Exception as e:
+        print(f"Error formatting system prompt: {e}")
+        system_prompt = "Error: Could not format system prompt." # Fallback
+
+    # User Prompt 结尾指令
+    user_prompt = f"""Based *only* on the provided context below (Sections I, II, III), please generate the comprehensive research report following ALL the guidelines and requirements detailed in the system prompt. Ensure deep analysis, structure with Introduction, thematic H2 sections with H3 subsections for each finding (3-5 paragraphs each), Scope/Limitations, and Conclusion. Every factual claim MUST have an inline citation [Title](URL) from Section III. Aim for a substantial word count by fully utilizing the context.
 
 {user_prompt_context}
 
-Generate the final Markdown report now:"""
+Generate the final Markdown research report now:"""
 
-    # --- Call LLM ---
+    # --- Call LLM and handle response ---
     markdown_content = ""
     try:
-        # Use a model suitable for long-form generation, maybe the creative one?
+        print("--- Calling LLM for Final Report Generation ---")
         response = await llm_creative.ainvoke([
             AIMessage(content=system_prompt),
             HumanMessage(content=user_prompt)
         ])
         markdown_content = response.content
-        
-        # Send completed update
+        print(f"--- LLM Call Successful. Report Length: {len(markdown_content)} chars ---")
+
+        # 发送 'final-report-generation' 完成 Update
         completed_updates = add_stream_update(state, {
-            'id': 'final-report-generation',
-            'type': 'report',
-            'status': 'completed',
+            'id': 'final-report-generation', 'type': 'report', 'status': 'completed',
             'title': 'Final Report Generated',
             'message': f'Successfully generated Markdown report ({len(markdown_content)} characters).',
-            'overwrite': True
+            'overwrite': True, 'timestamp': time.time() # 添加时间戳
         })
-        all_updates = running_updates + completed_updates
-        
-        # Add final progress update AFTER successful report generation
-        final_total_steps = state['total_steps'] + 1 # Add 1 for this report generation step
+        all_updates.extend(completed_updates) # 添加到列表中
+
+        # 发送最终 'research-progress' 完成 Update
+        base_total_steps = state.get('total_steps', 0)
+        # 如果 base_total_steps 有效则加1，否则基于 completed_steps 加1
+        final_total_steps = base_total_steps + 1 if base_total_steps > 0 else state.get('completed_steps_count', 0) + 1
         final_completed_steps = final_total_steps
+
         final_progress_update = add_stream_update(state, {
-             'id': 'research-progress',
-             'type': 'progress',
-             'status': 'completed',
-             'title': 'Research Progress',
-             'message': 'Research complete', 
+             'id': 'research-progress', 'type': 'progress', 'status': 'completed',
+             'title': 'Research Progress', # <-- 确保有 title
+             'message': 'Research complete',
              'completedSteps': final_completed_steps,
              'totalSteps': final_total_steps,
-             'isComplete': True,
-             'overwrite': True,
-             'timestamp': time.time()
+             'isComplete': True, 'overwrite': True, 'timestamp': time.time()
         })
         all_updates.extend(final_progress_update)
 
@@ -846,39 +883,38 @@ Generate the final Markdown report now:"""
         return {
             "final_report_markdown": markdown_content,
             "stream_updates": all_updates,
-            "completed_steps_count": final_completed_steps # Update final count
+            "completed_steps_count": final_completed_steps
         }
 
     except Exception as e:
         print(f"Error during final report generation: {e}")
-        # Send error update
+        # 发送 'final-report-generation' 失败 Update
         error_updates = add_stream_update(state, {
-            'id': 'final-report-generation',
-            'type': 'report',
-            'status': 'completed', # Mark step as ended
+            'id': 'final-report-generation', 'type': 'report', 'status': 'completed',
             'title': 'Final Report Generation Failed',
             'message': f"Error generating report: {str(e)}",
-            'overwrite': True
+            'overwrite': True, 'timestamp': time.time()
         })
-         # Also send final progress update indicating failure here
-        final_total_steps = state['total_steps'] + 1
+        all_updates.extend(error_updates)
+
+        # 发送最终 'research-progress' 完成 (但报告失败) Update
+        base_total_steps = state.get('total_steps', 0)
+        final_total_steps = base_total_steps + 1 if base_total_steps > 0 else state.get('completed_steps_count', 0) + 1
+        final_completed_steps = final_total_steps - 1 # 本节点失败
+
         final_progress_update = add_stream_update(state, {
-             'id': 'research-progress',
-             'type': 'progress',
-             'status': 'completed', # Graph run is complete, even if report failed
-             'title': 'Research Progress',
+             'id': 'research-progress', 'type': 'progress', 'status': 'completed',
+             'title': 'Research Progress', # <-- 确保有 title
              'message': 'Research finished, but final report generation failed.',
-             'completedSteps': final_total_steps -1, # Report step failed
+             'completedSteps': final_completed_steps,
              'totalSteps': final_total_steps,
-             'isComplete': True,
-             'overwrite': True,
-             'timestamp': time.time()
+             'isComplete': True, 'overwrite': True, 'timestamp': time.time()
         })
-        all_updates = running_updates + error_updates + final_progress_update
+        all_updates.extend(final_progress_update)
 
         print("--- Exiting Node: generate_final_markdown_report (Error) ---")
         return {
-            "final_report_markdown": f"# Report Generation Failed\n\nError: {str(e)}", # Put error in markdown
+            "final_report_markdown": f"# Report Generation Failed\n\nError: {str(e)}",
             "stream_updates": all_updates,
-            "completed_steps_count": state.get('completed_steps_count', 0) # Don't increment if this node failed
+            "completed_steps_count": state.get('completed_steps_count', 0) # 失败时不增加
         }

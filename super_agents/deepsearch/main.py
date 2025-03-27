@@ -1,131 +1,181 @@
 # main.py
 import asyncio
 import json
-import os
-import re # 用于文件名清理
-from datetime import datetime # 用于文件名时间戳
-from typing import Literal, List
+import os # <--- 导入 os 模块
+import re
+import time # <--- 确保导入 time (虽然 finalize_basic_research 中没用到，但 add_stream_update 可能需要)
+from datetime import datetime
+from typing import Literal, List, Dict, Any, Set # <--- 确保导入 List
 
-# --- Internal Imports ---
-from reason_graph.graph import app
-from reason_graph.state import ResearchState
-# 导入需要用到的 Pydantic 模型
-from reason_graph.schemas import StreamUpdate, FinalSynthesisResult, KeyFinding 
+# --- OpenAI 错误处理 ---
+try:
+    from openai import RateLimitError
+except ImportError:
+    # 如果用户没有安装 openai 包，定义一个基础异常类以便 except 块能工作
+    class RateLimitError(Exception):
+        pass
 
-# --- Helper Functions ---
+# --- LangGraph 和内部模块导入 ---
+try:
+    from reason_graph.graph import app
+    from reason_graph.state import ResearchState
+    # 导入需要用到的 Pydantic 模型
+    from reason_graph.schemas import StreamUpdate, FinalSynthesisResult, KeyFinding
+except ImportError as e:
+    print(f"Error importing graph components: {e}")
+    print("Please ensure 'reason_graph' package and its modules (graph, state, schemas) exist.")
+    exit(1)
+
+# --- 助手函数 ---
 
 def slugify(text: str) -> str:
     """将文本转换为安全的文件名部分 (简化版)."""
+    if not text:
+        return "no_topic"
     text = text.lower()
-    # 移除或替换非法字符
     text = re.sub(r'\s+', '_', text) # 空格替换为下划线
     text = re.sub(r'[^\w\-]+', '', text) # 移除所有非字母、数字、下划线、连字符
     text = text.strip('_')
-    return text[:100] # 限制长度
+    # 限制文件名长度，避免过长
+    return text[:100] if text else "sanitized_topic"
 
-def format_report_to_markdown(topic: str, synthesis_result: FinalSynthesisResult) -> str:
-    """将 FinalSynthesisResult 对象格式化为 Markdown 字符串."""
-    lines = []
-    lines.append(f"# Research Report: {topic}\n")
-
-    if synthesis_result.key_findings:
-        lines.append("## Key Findings\n")
-        for i, finding in enumerate(synthesis_result.key_findings):
-            lines.append(f"### Finding {i+1}: {finding.finding}\n")
-            lines.append(f"- **Confidence:** {finding.confidence:.2f}") # 格式化为两位小数
-            if finding.supporting_evidence:
-                lines.append("- **Supporting Evidence:**")
-                for evidence in finding.supporting_evidence:
-                    lines.append(f"  - {evidence}")
-            lines.append("\n") # 添加空行分隔
-
-    if synthesis_result.remaining_uncertainties:
-        lines.append("## Remaining Uncertainties\n")
-        for uncertainty in synthesis_result.remaining_uncertainties:
-            lines.append(f"- {uncertainty}")
-        lines.append("\n")
-
-    return "\n".join(lines)
+# --- 主研究函数 ---
 
 async def run_research(topic: str, depth: Literal['basic', 'advanced'] = 'basic'):
+    """执行研究图并处理输出和错误。"""
     initial_state: ResearchState = {
         "topic": topic,
         "depth": depth,
-        # ... (其他初始状态字段保持不变) ...
+        "research_plan": None,
+        "search_steps_planned": [],
+        "analysis_steps_planned": [],
+        "current_search_step_index": 0,
+        "current_analysis_step_index": 0,
+        "current_gap_search_index": 0,
+        "search_results": [],
+        "gap_analysis": None,
+        "additional_queries_planned": [],
+        "final_synthesis": None,
+        "final_report_markdown": None, # 确保初始状态包含
         "stream_updates": [],
-        # ...
+        "completed_steps_count": 0,
+        "total_steps": 0,
     }
 
     print("--- Starting Research Graph ---")
-    print(f"Initial State (partial): {{'topic': '{topic}', 'depth': '{depth}'}}")
+    print(f"Topic: '{topic}'")
+    print(f"Depth: '{depth}'")
     print("-" * 30)
 
     processed_updates_count = 0
     config = {"recursion_limit": 50} # 保持递归限制
 
-    # --- Streaming Execution ---
-    async for current_state in app.astream(
-        initial_state,
-        config=config,
-        stream_mode="values"
-    ):
-        all_current_updates: List[StreamUpdate] = current_state.get("stream_updates", [])
-        new_updates_count = len(all_current_updates) - processed_updates_count
-        if new_updates_count > 0:
-            newly_added_updates = all_current_updates[processed_updates_count:]
-            for update in newly_added_updates:
-                try:
-                    print(f"--- STREAM UPDATE (ID: {update.data.id} | Status: {update.data.status}) ---")
-                    print(json.dumps(update.model_dump(), indent=2, default=str)) # 使用 model_dump()
-                    print("-" * 30)
-                except AttributeError as e:
-                    print(f"--- Error processing stream update: {e} ---")
-                    print(f"Problematic update data: {update}")
-                    print("-" * 30)
-            processed_updates_count = len(all_current_updates)
+    final_state = initial_state.copy() # 初始化 final_state
+    error_occurred: Exception | None = None # 用于标记是否有错误发生
 
-        # --- Optional Current State Summary (保持不变) ---
-        print(f"--- Current State Summary ---")
-        print(f"  Search steps completed: {current_state.get('current_search_step_index', 0)}")
-        print(f"  Analysis steps completed: {current_state.get('current_analysis_step_index', 0)}")
-        print(f"  Total results so far: {len(current_state.get('search_results', []))}")
-        print("-" * 30)
+    # --- Streaming Execution with Error Handling ---
+    try:
+        async for current_state in app.astream(
+            initial_state,
+            config=config,
+            stream_mode="values" # 使用 values 模式获取完整状态
+        ):
+            final_state = current_state # 持续更新 final_state 为最新状态
+
+            # 检查并打印新的 stream_updates
+            all_current_updates: List[StreamUpdate] = current_state.get("stream_updates", [])
+            new_updates_count = len(all_current_updates) - processed_updates_count
+
+            if new_updates_count > 0:
+                newly_added_updates = all_current_updates[processed_updates_count:]
+                for update in newly_added_updates:
+                    try:
+                        # 尝试打印详细信息
+                        print(f"--- STREAM UPDATE (ID: {update.data.id} | Status: {update.data.status}) ---")
+                        # 使用 model_dump() (Pydantic V2) 而不是 dict()
+                        print(json.dumps(update.model_dump(), indent=2, default=str))
+                        print("-" * 30)
+                    except AttributeError as e:
+                        # 处理可能的意外情况，比如列表中混入了非 StreamUpdate 对象
+                        print(f"--- Error processing stream update (AttributeError): {e} ---")
+                        print(f"Problematic update data: {update}")
+                        print("-" * 30)
+                    except Exception as e: # 捕获其他可能的打印错误
+                        print(f"--- Error printing stream update: {e} ---")
+                        print(f"Problematic update data: {update}")
+                        print("-" * 30)
 
 
-    # --- Get Final State ---
-    print("\n--- Graph Execution Finished ---")
-    final_state = await app.ainvoke(initial_state, config=config)
+                # 更新已处理计数
+                processed_updates_count = len(all_current_updates)
 
-   # --- Get Final State ---
-    print("\n--- Graph Execution Finished ---")
-    # It's generally better to rely on the state from the stream's last value 
-    # if using stream_mode="values", but ainvoke is fine too.
-    # Let's assume current_state holds the final state after the loop finishes
-    final_state = current_state # Or use await app.ainvoke(initial_state, config=config)
-    
-    # --- Print Final State Summary ---
-    print("\n--- FINAL RESEARCH STATE (Summary) ---")
-    # ... (打印 topic, depth, plan, results, gap analysis - 基本不变) ...
+            # --- Optional Current State Summary ---
+            # 可以取消注释以查看每步状态摘要
+            # print(f"--- Current State Summary ---")
+            # print(f"  Search steps completed: {current_state.get('current_search_step_index', 0)}")
+            # print(f"  Analysis steps completed: {current_state.get('current_analysis_step_index', 0)}")
+            # print(f"  Total results so far: {len(current_state.get('search_results', []))}")
+            # print("-" * 30)
+
+
+    except RateLimitError as e: # 捕获特定的 OpenAI Quota 错误
+        error_occurred = e # 标记错误
+        print("\n" + "="*40)
+        print("!!! OpenAI API Error: Insufficient Quota !!!")
+        print("="*40)
+        print("The research process was stopped because your OpenAI account has exceeded its quota.")
+        print("Please check your OpenAI plan and billing details.")
+        print(f"Original error message: {e}")
+        print("Attempting to show partial results obtained before the error...")
+    except Exception as e: # 捕获其他可能的意外错误
+         error_occurred = e
+         print("\n" + "="*40)
+         print("!!! An Unexpected Error Occurred During Graph Execution !!!")
+         print("="*40)
+         print(f"Error type: {type(e).__name__}")
+         print(f"Error details: {e}")
+         # 打印详细的 traceback 以便调试
+         import traceback
+         traceback.print_exc()
+         print("Attempting to show partial results obtained before the error...")
+
+
+    # --- Process Final State ---
+    if error_occurred:
+         print("\n--- Graph Execution INTERRUPTED ---")
+    else:
+         print("\n--- Graph Execution Finished ---")
+
+    # 检查 final_state 是否有效
+    if not final_state or not isinstance(final_state, dict):
+         print("Error: Invalid or unavailable final state after execution.")
+         return None
+
+    # --- Print Final State Summary (始终尝试打印) ---
+    print("\n--- FINAL (Possibly Partial) RESEARCH STATE (Summary) ---") # 调整标题
     print(f"Topic: {final_state.get('topic', 'N/A')}")
     print(f"Depth: {final_state.get('depth', 'N/A')}")
     research_plan = final_state.get('research_plan')
-    if research_plan:
+    if research_plan and hasattr(research_plan, 'search_queries') and hasattr(research_plan, 'required_analyses'):
         print("\nResearch Plan:")
         print(f"- {len(research_plan.search_queries)} Search Queries Planned")
         print(f"- {len(research_plan.required_analyses)} Analyses Planned")
-    print(f"\nTotal Search Results Collected: {len(final_state.get('search_results', []))}")
+    search_results = final_state.get('search_results', [])
+    print(f"\nTotal Search Results Collected: {len(search_results)}")
     gap_analysis = final_state.get('gap_analysis')
-    if gap_analysis:
+    if gap_analysis and hasattr(gap_analysis, 'limitations') and hasattr(gap_analysis, 'knowledge_gaps'):
         print("\nGap Analysis:")
         print(f"- {len(gap_analysis.limitations)} Limitations Identified")
         print(f"- {len(gap_analysis.knowledge_gaps)} Knowledge Gaps Identified")
 
-    # --- Save Final Synthesis Report to Markdown ---
+
+    # --- Save Final Synthesis Report (只有在没有错误且报告存在时才保存) ---
     final_markdown = final_state.get('final_report_markdown')
 
-    if final_markdown and "Report Generation Failed" not in final_markdown:
+    if not error_occurred and final_markdown and isinstance(final_markdown, str) and "Report Generation Failed" not in final_markdown:
+        # 打印 Synthesis 摘要 (如果存在)
         final_synthesis_data = final_state.get('final_synthesis')
-        if final_synthesis_data:
+        if final_synthesis_data and hasattr(final_synthesis_data, 'key_findings') and hasattr(final_synthesis_data, 'remaining_uncertainties'):
              print("\nFinal Synthesis Summary:")
              print(f"- {len(final_synthesis_data.key_findings)} Key Findings")
              print(f"- {len(final_synthesis_data.remaining_uncertainties)} Remaining Uncertainties")
@@ -133,20 +183,17 @@ async def run_research(topic: str, depth: Literal['basic', 'advanced'] = 'basic'
         print("\n--- Saving Final Report to Markdown ---")
         try:
             markdown_content = final_markdown
-            topic_slug = slugify(final_state['topic'])
+            # 使用 .get 提供默认值以防 topic 丢失
+            topic_slug = slugify(final_state.get('topic', 'unknown_topic'))
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             filename = f"research_report_{topic_slug}_{timestamp}.md"
 
-            # --- 修改保存路径 ---
-            # 获取 main.py 文件所在的目录
-            script_dir = os.path.dirname(os.path.abspath(__file__)) 
-            # 定义 Output 子目录
-            output_dir = os.path.join(script_dir, "output") 
-            # 创建 Output 目录 (如果不存在)
-            os.makedirs(output_dir, exist_ok=True) 
-            # 组合最终文件路径
-            filepath = os.path.join(output_dir, filename) 
-            # --- 路径修改结束 ---
+            # --- 保存路径逻辑 ---
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            output_dir = os.path.join(script_dir, "Output")
+            os.makedirs(output_dir, exist_ok=True)
+            filepath = os.path.join(output_dir, filename)
+            # --- 路径逻辑结束 ---
 
             with open(filepath, "w", encoding="utf-8") as f:
                 f.write(markdown_content)
@@ -154,33 +201,41 @@ async def run_research(topic: str, depth: Literal['basic', 'advanced'] = 'basic'
 
         except Exception as e:
             print(f"Error saving report to Markdown: {e}")
-            
-    elif final_markdown: 
+
+    elif final_markdown and isinstance(final_markdown, str) and "Report Generation Failed" in final_markdown:
+         # 如果报告生成节点本身出错并返回了错误信息
          print("\n--- Final Report Generation Failed ---")
-         print(final_markdown)
+         # 只打印错误部分，避免打印整个 Markdown 错误模板
+         print(final_markdown.split('\n\n', 1)[-1]) # 尝试只打印 Error: ...
          print("Report not saved.")
+    elif error_occurred:
+         # 如果是因为 RateLimitError 等原因中断
+         print("\nFinal Report: Not generated due to execution error.")
     else:
-        print("\nFinal Report: Not generated (Flow did not reach or complete report generation step).")
+         # 正常结束但没有报告（例如 basic depth 或 synthesis 缺失）
+         print("\nFinal Report: Not generated (Flow did not reach, complete report generation step, or synthesis was missing).")
+
 
     print("\n--- END OF RESEARCH ---")
     return final_state
 
 # --- Main Execution Block ---
 async def main():
-     # --- 修改为用户输入 ---
-     topic = input("Please enter the research topic: ") 
+     # --- 用户输入 topic ---
+     topic = input("Please enter the research topic: ")
      if not topic:
          print("No topic entered. Exiting.")
-         return 
-     # (可选) 让用户选择 depth
-     # depth_input = input("Enter search depth (basic/advanced) [advanced]: ").lower()
-     # depth = 'basic' if depth_input == 'basic' else 'advanced' 
-     depth = 'advanced' # 暂时保持 advanced
-     # --- 用户输入修改结束 ---
-     
+         return
+     # --- (可选) 用户输入 depth ---
+     depth_input = input("Enter search depth (basic/advanced) [Default: advanced]: ").strip().lower()
+     depth: Literal['basic', 'advanced'] = 'basic' if depth_input == 'basic' else 'advanced'
+     # ---
+
      await run_research(topic, depth=depth)
 
 if __name__ == "__main__":
-    # 确保在 Windows 上 asyncio 也能正常工作 (如果需要)
-    # asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-    asyncio.run(main())
+    # 运行 asyncio 事件循环
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("\nResearch interrupted by user.")
