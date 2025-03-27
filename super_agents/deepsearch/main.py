@@ -105,43 +105,61 @@ async def run_research(topic: str, depth: Literal['basic', 'advanced'] = 'basic'
     
     # --- Print Final State Summary ---
     print("\n--- FINAL RESEARCH STATE (Summary) ---")
-    # ... (print topic, depth, plan, results, gap analysis - same as before) ...
+    # ... (打印 topic, depth, plan, results, gap analysis - 基本不变) ...
+    print(f"Topic: {final_state.get('topic', 'N/A')}")
+    print(f"Depth: {final_state.get('depth', 'N/A')}")
+    research_plan = final_state.get('research_plan')
+    if research_plan:
+        print("\nResearch Plan:")
+        print(f"- {len(research_plan.search_queries)} Search Queries Planned")
+        print(f"- {len(research_plan.required_analyses)} Analyses Planned")
+    print(f"\nTotal Search Results Collected: {len(final_state.get('search_results', []))}")
+    gap_analysis = final_state.get('gap_analysis')
+    if gap_analysis:
+        print("\nGap Analysis:")
+        print(f"- {len(gap_analysis.limitations)} Limitations Identified")
+        print(f"- {len(gap_analysis.knowledge_gaps)} Knowledge Gaps Identified")
 
-    # --- Check for Final Report Markdown ---
+    # --- Save Final Synthesis Report to Markdown ---
     final_markdown = final_state.get('final_report_markdown')
-    
-    if final_markdown and "Report Generation Failed" not in final_markdown: # Check if generation succeeded
-        # Print summary info about synthesis if available (might be redundant if printed elsewhere)
+
+    if final_markdown and "Report Generation Failed" not in final_markdown:
         final_synthesis_data = final_state.get('final_synthesis')
         if final_synthesis_data:
              print("\nFinal Synthesis Summary:")
              print(f"- {len(final_synthesis_data.key_findings)} Key Findings")
              print(f"- {len(final_synthesis_data.remaining_uncertainties)} Remaining Uncertainties")
-             
+
         print("\n--- Saving Final Report to Markdown ---")
         try:
-            # Content is already formatted markdown
             markdown_content = final_markdown
-            
-            # Generate filename (same logic as before)
             topic_slug = slugify(final_state['topic'])
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             filename = f"research_report_{topic_slug}_{timestamp}.md"
-            filepath = filename 
 
-            # Save file
+            # --- 修改保存路径 ---
+            # 获取 main.py 文件所在的目录
+            script_dir = os.path.dirname(os.path.abspath(__file__)) 
+            # 定义 Output 子目录
+            output_dir = os.path.join(script_dir, "output") 
+            # 创建 Output 目录 (如果不存在)
+            os.makedirs(output_dir, exist_ok=True) 
+            # 组合最终文件路径
+            filepath = os.path.join(output_dir, filename) 
+            # --- 路径修改结束 ---
+
             with open(filepath, "w", encoding="utf-8") as f:
                 f.write(markdown_content)
             print(f"Successfully saved report to: {filepath}")
 
         except Exception as e:
             print(f"Error saving report to Markdown: {e}")
-    elif final_markdown: # Handle case where generation failed and put error in markdown
+            
+    elif final_markdown: 
          print("\n--- Final Report Generation Failed ---")
-         print(final_markdown) # Print the error message from the markdown content
+         print(final_markdown)
          print("Report not saved.")
     else:
-        # If no final_report_markdown field (e.g., basic depth, or error before report node)
         print("\nFinal Report: Not generated (Flow did not reach or complete report generation step).")
 
     print("\n--- END OF RESEARCH ---")
@@ -149,8 +167,20 @@ async def run_research(topic: str, depth: Literal['basic', 'advanced'] = 'basic'
 
 # --- Main Execution Block ---
 async def main():
-     topic = "Impact of remote work on employee productivity and well-being"
-     await run_research(topic, depth='advanced')
+     # --- 修改为用户输入 ---
+     topic = input("Please enter the research topic: ") 
+     if not topic:
+         print("No topic entered. Exiting.")
+         return 
+     # (可选) 让用户选择 depth
+     # depth_input = input("Enter search depth (basic/advanced) [advanced]: ").lower()
+     # depth = 'basic' if depth_input == 'basic' else 'advanced' 
+     depth = 'advanced' # 暂时保持 advanced
+     # --- 用户输入修改结束 ---
+     
+     await run_research(topic, depth=depth)
 
 if __name__ == "__main__":
+    # 确保在 Windows 上 asyncio 也能正常工作 (如果需要)
+    # asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
     asyncio.run(main())
