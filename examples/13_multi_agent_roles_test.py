@@ -21,8 +21,8 @@ from contextlib import redirect_stdout, redirect_stderr
 load_dotenv()  # 自动加载 .env 文件
 
 # 1. 初始化大模型
-model = ChatOpenAI(model="gpt-4o-mini")
-
+#model = ChatOpenAI(model="gpt-4o-mini")
+model = ChatOpenAI(model="grok-2-latest", base_url="https://api.x.ai/v1", api_key="xai-aLEuHipuXiTyDMlXZ4gNkXtRQ6VwmBBxizblJJYyA7O4aUZ5dMTIOg0CViXcV5qObF9Hksg3Wyxy1rIc")
 # 设置日志捕获
 class LogCapture:
     def __init__(self):
@@ -280,8 +280,9 @@ if __name__ == "__main__":
                     {
                         "role": "user",
                         "content": (
-                            "我需要一个简单的Python爬虫来获取 https://baoyu.io/ 所有post，并将结果保存为CSV文件,放在/home/user下面。"
-                            "为了确保你争取爬取到了信息，请把爬取的信息以Markdown 格式返回。"
+                            "我需要一个Python爬虫来获取 https://www.paulgraham.com/articles.html 所有articles列表，并将结果保存为CSV文件,放在/home/user下面。"
+                            "并将你测试通过的爬虫代码返回给我。"
+                            "请确保你的代码能够正常运行。"
                             "如果遇到问题，请重试。"
                         )
                     }

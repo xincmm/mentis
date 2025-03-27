@@ -68,7 +68,7 @@ async def run_research(topic: str, depth: Literal['basic', 'advanced'] = 'basic'
     print("-" * 30)
 
     processed_updates_count = 0
-    config = {"recursion_limit": 50} # 保持递归限制
+    config = {"recursion_limit": 100} # 保持递归限制
 
     final_state = initial_state.copy() # 初始化 final_state
     error_occurred: Exception | None = None # 用于标记是否有错误发生
