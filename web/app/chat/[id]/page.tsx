@@ -1,20 +1,26 @@
-'use client';
+"use client";
 
-import { useState, useEffect, useRef } from 'react';
-import { useParams } from 'next/navigation';
-import { Button } from '@/components/ui/button';
+import { useState, useEffect, useRef } from "react";
+import { useParams } from "next/navigation";
+import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowUp, Square, ArrowDown, Ellipsis, AlertTriangle } from "lucide-react";
-import { useLangGraphAgent } from '@/hooks/useLangGraphAgent/useLangGraphAgent';
-import { AppCheckpoint, GraphNode } from '@/hooks/useLangGraphAgent/types';
-import { AgentState, InterruptValue, ResumeValue } from './agent-types';
-import { CheckpointCard } from './components/checkpoint-card';
-import { ChatbotNode } from './components/chatbot-node';
+import {
+  ArrowUp,
+  Square,
+  ArrowDown,
+  Ellipsis,
+  AlertTriangle,
+} from "lucide-react";
+import { useLangGraphAgent } from "@/hooks/useLangGraphAgent/useLangGraphAgent";
+import { AppCheckpoint, GraphNode } from "@/hooks/useLangGraphAgent/types";
+import { AgentState, InterruptValue, ResumeValue } from "./agent-types";
+import { CheckpointCard } from "./components/checkpoint-card";
+import { ChatbotNode } from "./components/chatbot-node";
 import { Checkbox } from "@/components/ui/checkbox";
-import WeatherNode from './components/weather/weather-node';
-import Reminder from './components/reminder';
-import { NodeCard } from './components/node-card';
-import ResearchNode from './components/research/research-node';
+import WeatherNode from "./components/weather/weather-node";
+import Reminder from "./components/reminder";
+import { NodeCard } from "./components/node-card";
+import ResearchNode from "./components/research/research-node";
 
 export default function ChatPage() {
   const params = useParams<{ id: string }>();
@@ -22,7 +28,7 @@ export default function ChatPage() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const [threadId] = useState(params.id);
-  const [inputValue, setInputValue] = useState('');
+  const [inputValue, setInputValue] = useState("");
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
   const [showNodesinfo, setShowNodesinfo] = useState(false);
@@ -32,27 +38,50 @@ export default function ChatPage() {
     "What's the weather in SF today?",
     "Set a reminder for to call John",
     "Tell me a joke",
-    "What can you do?"
+    "What can you do?",
   ];
 
-  const onCheckpointStart = (checkpoint: AppCheckpoint<AgentState, InterruptValue>) => {
-    console.log('Checkpoint started:', checkpoint.nodes);
-  }
+  const onCheckpointStart = (
+    checkpoint: AppCheckpoint<AgentState, InterruptValue>
+  ) => {
+    console.log("Checkpoint started:", checkpoint.nodes);
+  };
 
-  const onCheckpointEnd = (checkpoint: AppCheckpoint<AgentState, InterruptValue>) => {
-    console.log('Checkpoint ended:', checkpoint.nodes);
+  const onCheckpointEnd = (
+    checkpoint: AppCheckpoint<AgentState, InterruptValue>
+  ) => {
+    console.log("Checkpoint ended:", checkpoint.nodes);
 
     // Example how to do some application logic based on the agent flow. E.g. reminders list.
-    if (checkpoint.nodes.some(n => n.name === 'reminder')) {
-      console.log('Reminder created');
+    if (checkpoint.nodes.some((n) => n.name === "reminder")) {
+      console.log("Reminder created");
     }
-  }
+  };
 
-  const onCheckpointStateUpdate = (checkpoint: AppCheckpoint<AgentState, InterruptValue>) => {
-    console.log('Checkpoint intermediate state updated:', checkpoint.nodes, checkpoint.state);
-  }
+  const onCheckpointStateUpdate = (
+    checkpoint: AppCheckpoint<AgentState, InterruptValue>
+  ) => {
+    console.log(
+      "Checkpoint intermediate state updated:",
+      checkpoint.nodes,
+      checkpoint.state
+    );
+  };
 
-  const { status, appCheckpoints, run, resume, replay, restore, stop, restoring } = useLangGraphAgent<AgentState, InterruptValue, ResumeValue>({ onCheckpointStart, onCheckpointEnd, onCheckpointStateUpdate });
+  const {
+    status,
+    appCheckpoints,
+    run,
+    resume,
+    replay,
+    restore,
+    stop,
+    restoring,
+  } = useLangGraphAgent<AgentState, InterruptValue, ResumeValue>({
+    onCheckpointStart,
+    onCheckpointEnd,
+    onCheckpointStateUpdate,
+  });
 
   // Restore chat on page open
   useEffect(() => {
@@ -65,7 +94,7 @@ export default function ChatPage() {
 
   // Focus input on page load and after message is sent
   useEffect(() => {
-    const isInputEnabled = status !== 'running' && !restoring;
+    const isInputEnabled = status !== "running" && !restoring;
     if (inputRef.current && isInputEnabled) {
       inputRef.current.focus();
     }
@@ -75,8 +104,9 @@ export default function ChatPage() {
   useEffect(() => {
     const messagesContainer = messagesContainerRef.current;
     if (messagesContainer) {
-      messagesContainer.addEventListener('scroll', handleScrollUpdate);
-      return () => messagesContainer.removeEventListener('scroll', handleScrollUpdate);
+      messagesContainer.addEventListener("scroll", handleScrollUpdate);
+      return () =>
+        messagesContainer.removeEventListener("scroll", handleScrollUpdate);
     }
   }, []);
 
@@ -89,7 +119,8 @@ export default function ChatPage() {
 
   const handleScrollUpdate = () => {
     if (messagesContainerRef.current) {
-      const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current;
+      const { scrollTop, scrollHeight, clientHeight } =
+        messagesContainerRef.current;
       const isAtBottom = scrollHeight - scrollTop - clientHeight < 100; // 100px threshold
       setShowScrollButton(!isAtBottom);
 
@@ -105,48 +136,63 @@ export default function ChatPage() {
     if (messagesContainerRef.current) {
       messagesContainerRef.current.scrollTo({
         top: messagesContainerRef.current.scrollHeight,
-        behavior: 'smooth'
+        behavior: "smooth",
       });
     }
   };
 
   const handleExampleClick = (message: string) => {
-    if (status !== 'running' && !restoring) {
+    if (status !== "running" && !restoring) {
       setRestoreError(false);
-      run({ thread_id: threadId, state: { "messages": [{ type: 'user', content: message }] } });
+      run({
+        thread_id: threadId,
+        state: { messages: [{ type: "user", content: message }] },
+      });
     }
   };
 
   const handleResume = (resumeValue: ResumeValue) => {
     resume({ thread_id: threadId, resume: resumeValue });
-  }
+  };
 
-  const renderCheckpointError = (checkpoint: AppCheckpoint<AgentState, InterruptValue>): React.ReactNode => {
+  const renderCheckpointError = (
+    checkpoint: AppCheckpoint<AgentState, InterruptValue>
+  ): React.ReactNode => {
     return (
       <div className="text-sm text-red-500 font-medium p-2 bg-red-50 rounded-md flex items-center gap-2">
         <AlertTriangle className="h-4 w-4" />
         Error in {checkpoint.checkpointConfig.configurable.checkpoint_id}
       </div>
     );
-  }
+  };
 
-  const renderNode = (checkpoint: AppCheckpoint<AgentState, InterruptValue>, node: GraphNode<AgentState>): React.ReactNode => {
+  const renderNode = (
+    checkpoint: AppCheckpoint<AgentState, InterruptValue>,
+    node: GraphNode<AgentState>
+  ): React.ReactNode => {
     switch (node.name) {
-      case '__start__':
-      case 'agent':
+      case "__start__":
+      case "agent":
         return <ChatbotNode nodeState={node.state} />;
-      case 'weather':
+      case "weather":
         return <WeatherNode nodeState={node.state} />;
-      case 'reminder':
-        return <Reminder interruptValue={checkpoint.interruptValue as string} onResume={handleResume} />;
-      case 'research':
-      case 'search':
-      case 'report':
+      case "reminder":
+        return (
+          <Reminder
+            interruptValue={checkpoint.interruptValue as string}
+            onResume={handleResume}
+          />
+        );
+      case "research":
+      case "search":
+      case "report":
         return <ResearchNode nodeState={node.state} />;
       default:
         return null;
     }
-  }
+  };
+
+  console.log("appCheckpoints", appCheckpoints);
 
   return (
     <div className="flex flex-col h-screen">
@@ -172,7 +218,10 @@ export default function ChatPage() {
       >
         <div className="space-y-2 max-w-2xl mx-auto w-full">
           {appCheckpoints.map((checkpoint) => (
-            <div key={checkpoint.checkpointConfig.configurable.checkpoint_id} className="space-y-2">
+            <div
+              key={checkpoint.checkpointConfig.configurable.checkpoint_id}
+              className="space-y-2"
+            >
               {showNodesinfo && (
                 <CheckpointCard
                   thread_id={threadId}
@@ -180,20 +229,22 @@ export default function ChatPage() {
                   replayHandler={replay}
                 />
               )}
-              {checkpoint.error ? renderCheckpointError(checkpoint) : checkpoint.nodes.map((node, nodeIndex) => (
-                <div key={nodeIndex} className="space-y-2">
-                  {showNodesinfo && <NodeCard node={node} />}
-                  {renderNode(checkpoint, node)}
-                </div>
-              ))}
+              {checkpoint.error
+                ? renderCheckpointError(checkpoint)
+                : checkpoint.nodes.map((node, nodeIndex) => (
+                    <div key={nodeIndex} className="space-y-2">
+                      {showNodesinfo && <NodeCard node={node} />}
+                      {renderNode(checkpoint, node)}
+                    </div>
+                  ))}
             </div>
           ))}
-          {(status === 'running' || restoring) && (
+          {(status === "running" || restoring) && (
             <div className="flex items-center justify-center p-4">
               <Ellipsis className="w-6 h-6 text-muted-foreground animate-pulse" />
             </div>
           )}
-          {(status === 'error') && (
+          {status === "error" && (
             <div className="text-sm text-red-500 font-medium font-mono p-2 bg-red-50 rounded-md flex items-center gap-2">
               <AlertTriangle className="h-4 w-4" />
               Error running agent.
@@ -228,7 +279,7 @@ export default function ChatPage() {
                 variant="outline"
                 size="sm"
                 onClick={() => handleExampleClick(message)}
-                disabled={status === 'running' || restoring}
+                disabled={status === "running" || restoring}
                 className="text-xs font-mono w-full"
               >
                 {message}
@@ -241,20 +292,25 @@ export default function ChatPage() {
               className="pr-24 resize-none font-mono"
               placeholder="Enter your message..."
               value={inputValue}
-              disabled={status === 'running' || restoring}
+              disabled={status === "running" || restoring}
               onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
+                if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
-                  if (inputValue.trim() && status !== 'running' && !restoring) {
+                  if (inputValue.trim() && status !== "running" && !restoring) {
                     setRestoreError(false);
-                    run({ thread_id: threadId, state: { "messages": [{ type: 'user', content: inputValue }] } });
-                    setInputValue('');
+                    run({
+                      thread_id: threadId,
+                      state: {
+                        messages: [{ type: "user", content: inputValue }],
+                      },
+                    });
+                    setInputValue("");
                   }
                 }
               }}
             />
-            {status === 'running' ? (
+            {status === "running" ? (
               <Button
                 className="absolute right-3 top-[50%] translate-y-[-50%]"
                 size="icon"
@@ -271,8 +327,13 @@ export default function ChatPage() {
                 disabled={!inputValue.trim() || restoring}
                 onClick={() => {
                   if (inputValue.trim() && !restoring) {
-                    run({ thread_id: threadId, state: { "messages": [{ type: 'user', content: inputValue }] } });
-                    setInputValue('');
+                    run({
+                      thread_id: threadId,
+                      state: {
+                        messages: [{ type: "user", content: inputValue }],
+                      },
+                    });
+                    setInputValue("");
                   }
                 }}
               >

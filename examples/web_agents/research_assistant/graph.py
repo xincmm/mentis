@@ -1,3 +1,5 @@
+import os
+from datetime import datetime
 from langgraph.prebuilt import create_react_agent
 from langchain_openai import ChatOpenAI
 from typing import Dict, Any
@@ -10,7 +12,11 @@ from core.tools.registry import register_tool, ToolCategory
 
 load_dotenv()  # 自动加载 .env 文件
 # 初始化大模型
-model = ChatOpenAI(model="gpt-4o-mini")
+model = ChatOpenAI(
+    model="gpt-4o-mini",
+    api_key=os.getenv("OPENROUTER_API_KEY"),
+    base_url=os.getenv("OPENROUTER_BASE_URL"),
+)
 
 # 创建Tavily搜索工具
 tavily_search = TavilySearchResults(
@@ -18,12 +24,13 @@ tavily_search = TavilySearchResults(
     include_answer=True,
     include_raw_content=False,
     include_images=False,
-    search_depth="advanced"
+    search_depth="advanced",
 )
 
 # 创建E2B代码解释器工具
 e2b_code_interpreter = E2BCodeInterpreterTool()
 
+current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 research_agent = create_react_agent(
     model=model,
@@ -32,6 +39,7 @@ research_agent = create_react_agent(
     # Prompt 告诉它是一个研究型 Agent，可调用 tavily_search 和 e2b_code_interpreter
     prompt=(
         "你是一位世界级的研究专家和数据分析师，擅长信息检索和数据分析。你有两个强大的工具可以使用：\n"
+        "current_time: {current_time}\n"
         "1. 'tavily_search_results_json'：用于搜索网络获取实时信息\n"
         "2. 'e2b_code_interpreter'：用于执行Python代码，支持数据分析和可视化\n\n"
         "当面对问题时，请遵循以下方法论：\n"
